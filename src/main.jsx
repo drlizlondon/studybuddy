@@ -24,6 +24,8 @@ import { AVERY_MOTIVATION_LINES, AVERY_SEQUENCES, getAverySequence } from "./dat
 import { AVERY_THREADS, getThreadsByTrigger } from "./data/averyThreads";
 import "./styles.css";
 
+const assetUrl = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
+
 const AVERY_TASKS = [
   "Finish my portfolio section.",
   "Review my interview notes.",
@@ -43,24 +45,24 @@ const SCRIPTED_EVENTS = [
 // Final music files should be sourced from properly licensed royalty-free libraries
 // such as Pixabay Music, Free Music Archive, or Uppbeat, with licence checks before public release.
 const TRACKS = {
-  lofi: { name: "Lofi", src: "/audio/lofi-study.mp3" },
-  piano: { name: "Revision piano", src: "/audio/revision-piano.mp3" },
-  nature: { name: "Nature sounds", src: "/audio/nature-sounds.mp3" },
+  lofi: { name: "Lofi", src: assetUrl("/audio/lofi-study.mp3") },
+  piano: { name: "Revision piano", src: assetUrl("/audio/revision-piano.mp3") },
+  nature: { name: "Nature sounds", src: assetUrl("/audio/nature-sounds.mp3") },
   quiet: { name: "Quiet room", src: "" }
 };
 
 const VIDEO_MEDIA = {
   day: {
-    start: "/video/day/day-working-start.mp4",
-    loop: "/video/day/day-working-loop.mp4",
-    engaging: "/video/day/day-engaging.mp4",
-    fallback: "/images/master-day-frame.png"
+    start: assetUrl("/video/day/day-working-start.mp4"),
+    loop: assetUrl("/video/day/day-working-loop.mp4"),
+    engaging: assetUrl("/video/day/day-engaging.mp4"),
+    fallback: assetUrl("/images/master-day-frame.png")
   },
   evening: {
-    start: "/video/evening/evening-working-start.mp4",
-    loop: "/video/evening/evening-working-loop.mp4",
-    engagingStill: "/images/evening-engaging-still.png",
-    fallback: "/images/master-evening-frame.png"
+    start: assetUrl("/video/evening/evening-working-start.mp4"),
+    loop: assetUrl("/video/evening/evening-working-loop.mp4"),
+    engagingStill: assetUrl("/images/evening-engaging-still.png"),
+    fallback: assetUrl("/images/master-evening-frame.png")
   }
 };
 
@@ -911,22 +913,37 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
   );
   const mediaForState = (modeTheme, state) => {
     const media = VIDEO_MEDIA[modeTheme];
+    const fallback = media.fallback || VIDEO_MEDIA.day.fallback;
     if (state === "startingWork") {
-      return { src: media.start, type: "video", mode: "startingWork", loop: false, poster: media.fallback };
+      return { src: media.start, type: "video", mode: "startingWork", loop: false, fallback, poster: fallback };
     }
     if (state === "engagedListening") {
       if (modeTheme === "day") {
-        return { src: media.engaging, type: "video", mode: "engagedListening", loop: true, poster: media.fallback };
+        return { src: media.engaging, type: "video", mode: "engagedListening", loop: true, fallback, poster: fallback };
       }
-      return { src: media.engagingStill || media.fallback, type: "image", mode: "engagedListening", loop: false, poster: media.fallback };
+      return {
+        src: media.engagingStill || fallback,
+        type: "image",
+        mode: "engagedListening",
+        loop: false,
+        fallback,
+        poster: fallback
+      };
     }
-    return { src: media.loop, type: "video", mode: "passiveWorking", loop: true, poster: media.fallback };
+    return { src: media.loop, type: "video", mode: "passiveWorking", loop: true, fallback, poster: fallback };
   };
 
   const [currentMedia, setCurrentMedia] = useState(() => mediaForState(theme, visualState));
   const [incomingMedia, setIncomingMedia] = useState(null);
   const [isFading, setIsFading] = useState(false);
   const [poster, setPoster] = useState(() => VIDEO_MEDIA[theme].fallback);
+  const [sceneStatus, setSceneStatus] = useState({
+    loaded: false,
+    failed: false,
+    activeSrc: mediaForState(theme, visualState).src,
+    fallbackSrc: VIDEO_MEDIA[theme].fallback
+  });
+  const [failedSources, setFailedSources] = useState(() => new Set());
   const currentRef = useRef(currentMedia);
   const currentVideoRef = useRef(null);
   const incomingVideoRef = useRef(null);
@@ -943,10 +960,22 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
       setCurrentMedia(nextMedia);
       setIncomingMedia(null);
       setIsFading(false);
+      setSceneStatus({
+        loaded: nextMedia.type === "image",
+        failed: false,
+        activeSrc: nextMedia.src,
+        fallbackSrc: nextMedia.fallback || nextMedia.poster || VIDEO_MEDIA[theme].fallback
+      });
       return;
     }
 
     setIncomingMedia(nextMedia);
+    setSceneStatus({
+      loaded: nextMedia.type === "image",
+      failed: false,
+      activeSrc: nextMedia.src,
+      fallbackSrc: nextMedia.fallback || nextMedia.poster || VIDEO_MEDIA[theme].fallback
+    });
     window.requestAnimationFrame(() => setIsFading(true));
   };
 
@@ -997,13 +1026,54 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
   };
 
   const handleError = (media) => {
-    setPoster(VIDEO_MEDIA[theme].fallback);
-    transitionTo({ src: VIDEO_MEDIA[theme].fallback, type: "image", mode: media.mode, loop: false, poster: VIDEO_MEDIA[theme].fallback });
+    const fallback = media.fallback || VIDEO_MEDIA[theme].fallback;
+    console.warn("Study Double scene media failed:", media.src);
+    setFailedSources((sources) => new Set([...sources, media.src]));
+    setPoster(fallback);
+    setSceneStatus({
+      loaded: false,
+      failed: true,
+      activeSrc: media.src,
+      fallbackSrc: fallback
+    });
+    const fallbackMedia = {
+      src: fallback,
+      type: "image",
+      mode: media.mode,
+      loop: false,
+      fallback,
+      poster: fallback
+    };
+    if (media.src === currentRef.current?.src) {
+      currentRef.current = fallbackMedia;
+      setCurrentMedia(fallbackMedia);
+      setIncomingMedia(null);
+      setIsFading(false);
+    } else {
+      setIncomingMedia(null);
+      setIsFading(false);
+    }
+  };
+
+  const handleLoaded = (media) => {
+    setSceneStatus({
+      loaded: true,
+      failed: false,
+      activeSrc: media.src,
+      fallbackSrc: media.fallback || media.poster || VIDEO_MEDIA[theme].fallback
+    });
   };
 
   const renderMedia = (media, className, ref) => {
+    if (!media?.src || failedSources.has(media.src)) return null;
     if (media.type === "image") {
-      return <img key={media.src} className={className} src={media.src} alt="" />;
+      return (
+        <div
+          key={media.src}
+          className={`${className} scene-still`}
+          style={{ "--still-src": `url(${media.src || media.fallback || poster})` }}
+        />
+      );
     }
     return (
       <video
@@ -1017,6 +1087,8 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
         preload="metadata"
         loop={media.loop}
         autoPlay
+        onLoadedData={() => handleLoaded(media)}
+        onCanPlay={() => handleLoaded(media)}
         onEnded={() => handleEnded(media)}
         onError={() => handleError(media)}
       />
@@ -1044,6 +1116,12 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
           />
         </>
       )}
+      <div className="scene-debug-label" aria-hidden="true">
+        <span>{visualState}</span>
+        <span>{sceneStatus.activeSrc}</span>
+        <span>{sceneStatus.fallbackSrc}</span>
+        <span>{sceneStatus.failed ? "failed" : sceneStatus.loaded ? "loaded" : "loading"}</span>
+      </div>
     </div>
   );
 }

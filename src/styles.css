@@ -4362,6 +4362,13 @@ body {
   will-change: opacity;
 }
 
+.scene-still {
+  background-image: var(--still-src);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+
 .scene-video-current {
   z-index: 1;
 }
@@ -4374,6 +4381,27 @@ body {
 
 .scene-video-incoming.is-visible {
   opacity: 1;
+}
+
+.scene-debug-label {
+  position: fixed;
+  right: max(8px, env(safe-area-inset-right));
+  bottom: max(8px, env(safe-area-inset-bottom));
+  z-index: 120;
+  display: grid;
+  gap: 2px;
+  max-width: min(360px, calc(100vw - 16px));
+  padding: 6px 7px;
+  border-radius: 6px;
+  background: rgba(6, 20, 27, 0.72);
+  color: #f7f2ea;
+  font-size: 9px;
+  line-height: 1.15;
+  font-weight: 700;
+  opacity: 0.72;
+  pointer-events: none;
+  word-break: break-all;
+  backdrop-filter: blur(8px);
 }
 
 .evening .scene-video,
