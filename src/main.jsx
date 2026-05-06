@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { AVERY_MOTIVATION_LINES, AVERY_SEQUENCES, getAverySequence } from "./data/averySequences";
 import { AVERY_THREADS, getThreadsByTrigger } from "./data/averyThreads";
+import { resusCouncilAdult2025 } from "./data/questionBanks/resusCouncilAdult2025";
 import "./styles.css";
 
 const assetUrl = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
@@ -68,6 +69,7 @@ const VIDEO_MEDIA = {
 
 const TALK_OPTIONS = [
   { label: "I'm ready to start", type: "sequence", id: "readyToStart" },
+  { label: "Test me", type: "quiz" },
   { label: "I want to take a break", type: "sequence", id: "breakPrompt" },
   { label: "I'm struggling to focus", type: "sequence", id: "strugglingToFocus" },
   { label: "I'm back", type: "sequence", id: "backFromBreak" },
@@ -77,6 +79,44 @@ const TALK_OPTIONS = [
 ];
 
 const DISPLAY_SIZES = ["comfortable", "large", "extra"];
+const QUIZ_STORAGE_KEY = "studyDoubleAveryQuizAttempts";
+const QUIZ_TOPICS = [
+  "Adult Choking",
+  "Adult In-Hospital Resuscitation",
+  "Refractory Anaphylaxis",
+  "Traumatic Cardiac Arrest"
+];
+const CORRECT_QUIZ_LINES = [
+  "Good. You knew that.",
+  "Yes. That's the one.",
+  "Nice. Clean answer.",
+  "Exactly. Keep that pattern in your head.",
+  "Good retrieval. That counts."
+];
+const INCORRECT_QUIZ_LINES = [
+  "Not quite. Don't spiral, just read the explanation.",
+  "Close. This is exactly why we practise.",
+  "That one is a useful miss.",
+  "Okay, that gap is now visible. That is progress.",
+  "No panic. We correct it and keep going."
+];
+
+const createInactiveQuizState = () => ({
+  quizState: "inactive",
+  activeQuestionBankId: null,
+  selectedTopic: null,
+  selectedQuestions: [],
+  currentQuestionIndex: 0,
+  answers: [],
+  score: 0,
+  streak: 0,
+  wrongStreak: 0,
+  confidenceRating: null,
+  startedAt: null,
+  completedAt: null,
+  shortfallNote: "",
+  averyLine: ""
+});
 
 function getSavedDisplaySize() {
   if (typeof window === "undefined") return "large";
@@ -87,6 +127,74 @@ function getSavedDisplaySize() {
 function getSavedViewportSetting() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem("studyDoubleShowViewport") === "true";
+}
+
+function getSavedQuizAttempts() {
+  if (typeof window === "undefined") return [];
+  try {
+    const attempts = JSON.parse(window.localStorage.getItem(QUIZ_STORAGE_KEY) || "[]");
+    return Array.isArray(attempts) ? attempts.slice(0, 12) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveQuizAttempts(attempts) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempts.slice(0, 12)));
+}
+
+function shuffleItems(items) {
+  return [...items]
+    .map((item) => ({ item, sort: Math.random() }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({ item }) => item);
+}
+
+function pickQuizQuestions(bank, amount, topic = null) {
+  const pool = topic ? bank.questions.filter((question) => question.topic === topic) : bank.questions;
+  const selected = shuffleItems(pool).slice(0, amount);
+  return {
+    selected,
+    shortfallNote:
+      selected.length < amount ? `Only ${selected.length} ${topic ? "topic " : ""}questions are available, so Avery will use all of them.` : ""
+  };
+}
+
+function getTopicSummary(answers) {
+  const byTopic = answers.reduce((summary, answer) => {
+    const topic = answer.question.topic;
+    const current = summary[topic] || { topic, correct: 0, total: 0 };
+    current.total += 1;
+    if (answer.isCorrect) current.correct += 1;
+    summary[topic] = current;
+    return summary;
+  }, {});
+  const topics = Object.values(byTopic);
+  if (!topics.length) return { strongestTopic: null, weakestTopic: null, weakTopics: [] };
+  const sorted = [...topics].sort((a, b) => a.correct / a.total - b.correct / b.total);
+  return {
+    strongestTopic: sorted[sorted.length - 1]?.topic || null,
+    weakestTopic: sorted[0]?.topic || null,
+    weakTopics: sorted.filter((topic) => topic.correct < topic.total).map((topic) => topic.topic)
+  };
+}
+
+function getDifficultyBreakdown(answers) {
+  return answers.reduce((breakdown, answer) => {
+    const key = answer.question.difficulty;
+    const current = breakdown[key] || { correct: 0, total: 0 };
+    current.total += 1;
+    if (answer.isCorrect) current.correct += 1;
+    breakdown[key] = current;
+    return breakdown;
+  }, {});
+}
+
+function getCompletionLine(percentage) {
+  if (percentage >= 80) return "That's strong. You can trust more of this than you think.";
+  if (percentage >= 50) return "Good working set. There are gaps, but they're fixable.";
+  return "That felt rough, but it gave us a map. We know what to revisit.";
 }
 
 function minutesToLabel(totalMinutes) {
@@ -253,6 +361,10 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [displaySettingsOpen, setDisplaySettingsOpen] = useState(false);
   const [displaySize, setDisplaySize] = useState(getSavedDisplaySize);
   const [showViewport, setShowViewport] = useState(getSavedViewportSetting);
+  const [quiz, setQuiz] = useState(createInactiveQuizState);
+  const [quizSetupStep, setQuizSetupStep] = useState("count");
+  const [showRevisionScores, setShowRevisionScores] = useState(false);
+  const [quizAttempts, setQuizAttempts] = useState(getSavedQuizAttempts);
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 0 : window.innerWidth,
     height: typeof window === "undefined" ? 0 : window.innerHeight
@@ -265,14 +377,16 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   const progress = Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 88 + averyBoost));
   const sprintActive = miniSprintRemaining > 0;
+  const isQuizActive = quiz.quizState !== "inactive";
   const hasActiveMessage = messageKey > 0 && !["closed", "open"].includes(conversationState);
   const averyVisualState = useMemo(() => {
+    if (isQuizActive) return "engagedListening";
     if (["open", "averySpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
       return "engagedListening";
     }
     if (conversationState === "returningToWork") return "startingWork";
     return "passiveWorking";
-  }, [conversationState]);
+  }, [conversationState, isQuizActive]);
 
   const say = (text, actions = []) => {
     setMessage(text);
@@ -439,8 +553,142 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     action: () => returnToWork()
   });
 
+  const enterQuizSetup = () => {
+    setTalkOpen(true);
+    setShowRevisionScores(false);
+    setQuizSetupStep("count");
+    setQuiz({
+      ...createInactiveQuizState(),
+      quizState: "setup",
+      activeQuestionBankId: resusCouncilAdult2025.id,
+      averyLine: "Okay. I'll test you properly. How many questions?"
+    });
+    setConversationState("waitingForUser");
+    say("Okay. I'll test you properly. How many questions?");
+  };
+
+  const startQuiz = (amount, topic = null) => {
+    const { selected, shortfallNote } = pickQuizQuestions(resusCouncilAdult2025, amount, topic);
+    if (!selected.length) {
+      say("I can't find questions for that topic yet. Pick another one and we'll keep going.");
+      setQuizSetupStep("topic");
+      return;
+    }
+    setTalkOpen(true);
+    setShowRevisionScores(false);
+    setQuiz({
+      ...createInactiveQuizState(),
+      quizState: "askingQuestion",
+      activeQuestionBankId: resusCouncilAdult2025.id,
+      selectedTopic: topic,
+      selectedQuestions: selected,
+      startedAt: new Date().toISOString(),
+      shortfallNote,
+      averyLine: shortfallNote || "Question one. Take it carefully."
+    });
+    setConversationState("waitingForUser");
+    say(shortfallNote || "Question one. Take it carefully.");
+  };
+
+  const answerQuizQuestion = (answerIndex) => {
+    setQuiz((current) => {
+      if (current.quizState !== "askingQuestion") return current;
+      const question = current.selectedQuestions[current.currentQuestionIndex];
+      if (!question) return current;
+      const isCorrect = answerIndex === question.correctAnswerIndex;
+      const nextStreak = isCorrect ? current.streak + 1 : 0;
+      const nextWrongStreak = isCorrect ? 0 : current.wrongStreak + 1;
+      const answer = {
+        question,
+        selectedAnswerIndex: answerIndex,
+        correctAnswerIndex: question.correctAnswerIndex,
+        isCorrect
+      };
+      let line = isCorrect
+        ? CORRECT_QUIZ_LINES[current.answers.length % CORRECT_QUIZ_LINES.length]
+        : INCORRECT_QUIZ_LINES[current.answers.length % INCORRECT_QUIZ_LINES.length];
+      if (nextStreak === 3) line = "That's three in a row. You're warmer than you think.";
+      if (nextWrongStreak === 2) line = "Slow it down. One careful question at a time.";
+      say(line);
+      return {
+        ...current,
+        quizState: "showingResult",
+        answers: [...current.answers, answer],
+        score: current.score + (isCorrect ? 1 : 0),
+        streak: nextStreak,
+        wrongStreak: nextWrongStreak,
+        averyLine: line
+      };
+    });
+  };
+
+  const completeQuiz = (nextQuiz) => {
+    const total = nextQuiz.selectedQuestions.length;
+    const percentage = total ? Math.round((nextQuiz.score / total) * 100) : 0;
+    const topicSummary = getTopicSummary(nextQuiz.answers);
+    const attempt = {
+      date: nextQuiz.completedAt,
+      questionBankId: nextQuiz.activeQuestionBankId,
+      topic: nextQuiz.selectedTopic,
+      numberOfQuestions: total,
+      score: nextQuiz.score,
+      percentage,
+      topicsMissed: topicSummary.weakTopics,
+      difficultyBreakdown: getDifficultyBreakdown(nextQuiz.answers),
+      completedQuestionIds: nextQuiz.selectedQuestions.map((question) => question.id)
+    };
+    setQuizAttempts((attempts) => {
+      const updated = [attempt, ...attempts].slice(0, 12);
+      saveQuizAttempts(updated);
+      return updated;
+    });
+    say(getCompletionLine(percentage));
+  };
+
+  const goToNextQuizQuestion = () => {
+    setQuiz((current) => {
+      if (current.quizState !== "showingResult") return current;
+      const nextIndex = current.currentQuestionIndex + 1;
+      if (nextIndex >= current.selectedQuestions.length) {
+        const total = current.selectedQuestions.length;
+        const percentage = total ? Math.round((current.score / total) * 100) : 0;
+        const completionLine = getCompletionLine(percentage);
+        const completed = {
+          ...current,
+          quizState: "complete",
+          completedAt: new Date().toISOString(),
+          averyLine: completionLine
+        };
+        completeQuiz(completed);
+        return completed;
+      }
+      const nextLine = `Question ${nextIndex + 1}.`;
+      say(nextLine);
+      return {
+        ...current,
+        quizState: "askingQuestion",
+        currentQuestionIndex: nextIndex,
+        averyLine: nextLine
+      };
+    });
+  };
+
+  const quizBackToWork = () => {
+    setQuiz(createInactiveQuizState());
+    returnToWork("I'm going back to my notes now.");
+  };
+
+  const quizTakeFive = () => {
+    setQuiz(createInactiveQuizState());
+    setTalkOpen(false);
+    startBreak(5);
+  };
+
   const returnToWork = (line = pendingBackToWorkLine) => {
     setTalkOpen(false);
+    setQuiz(createInactiveQuizState());
+    setQuizSetupStep("count");
+    setShowRevisionScores(false);
     setMusicPrompt(false);
     setShowBreakPrompt(false);
     setActiveSequenceId(null);
@@ -616,6 +864,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const handleTalk = (option) => {
+    if (option.type === "quiz") enterQuizSetup();
     if (option.type === "sequence") runAverySequence(option.id);
     if (option.type === "thread") runAveryThread(option.trigger);
   };
@@ -677,7 +926,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   return (
     <main
       ref={roomRef}
-      className={`study-room ${theme} text-${displaySize} ${isFullscreen ? "fullscreen-active" : ""} ${talkOpen ? "talk-open" : ""} ${musicPrompt ? "music-open" : ""} ${hasActiveMessage || talkActions.length || isBreak || showBreakPrompt ? "context-open" : ""}`}
+      className={`study-room ${theme} text-${displaySize} ${isFullscreen ? "fullscreen-active" : ""} ${talkOpen ? "talk-open" : ""} ${musicPrompt ? "music-open" : ""} ${isQuizActive ? "quiz-open" : ""} ${hasActiveMessage || talkActions.length || isBreak || showBreakPrompt || isQuizActive ? "context-open" : ""}`}
     >
       <audio ref={audioRef} loop onError={handleTrackError} />
       <RoomScene theme={theme} averyVisualState={averyVisualState} onStartingWorkEnded={handleStartingWorkEnded} />
@@ -850,6 +1099,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             if (talkOpen) closeAveryInteraction();
             else {
               setTalkOpen(true);
+              setShowRevisionScores(false);
               setConversationState("open");
             }
           }}
@@ -865,9 +1115,29 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             <button className="talk-close" onClick={closeAveryInteraction} aria-label="Close Avery options">
               <X size={16} />
             </button>
-            {TALK_OPTIONS.map((option) => (
-              <button key={option.label} onClick={() => handleTalk(option)}>{option.label}</button>
-            ))}
+            {isQuizActive ? (
+              <QuizPanel
+                bank={resusCouncilAdult2025}
+                quiz={quiz}
+                setupStep={quizSetupStep}
+                setSetupStep={setQuizSetupStep}
+                onStartQuiz={startQuiz}
+                onAnswer={answerQuizQuestion}
+                onNext={goToNextQuizQuestion}
+                onQuizAgain={enterQuizSetup}
+                onBackToWork={quizBackToWork}
+                onTakeFive={quizTakeFive}
+              />
+            ) : showRevisionScores ? (
+              <RevisionScores attempts={quizAttempts} onBack={() => setShowRevisionScores(false)} />
+            ) : (
+              <>
+                {TALK_OPTIONS.map((option) => (
+                  <button key={option.label} onClick={() => handleTalk(option)}>{option.label}</button>
+                ))}
+                <button onClick={() => setShowRevisionScores(true)}>Revision score</button>
+              </>
+            )}
           </div>
           </>
         )}
@@ -883,6 +1153,183 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
 
       {summary && <SummaryModal summary={summary} onRestart={onRestart} />}
     </main>
+  );
+}
+
+function QuizPanel({
+  bank,
+  quiz,
+  setupStep,
+  setSetupStep,
+  onStartQuiz,
+  onAnswer,
+  onNext,
+  onQuizAgain,
+  onBackToWork,
+  onTakeFive
+}) {
+  const currentQuestion = quiz.selectedQuestions[quiz.currentQuestionIndex];
+  const latestAnswer = quiz.answers[quiz.answers.length - 1];
+  const total = quiz.selectedQuestions.length;
+  const percentage = total ? Math.round((quiz.score / total) * 100) : 0;
+  const topicSummary = getTopicSummary(quiz.answers);
+
+  if (quiz.quizState === "setup") {
+    return (
+      <div className="quiz-panel">
+        <div className="quiz-heading">
+          <span>Quiz setup</span>
+          <h2>{bank.name}</h2>
+          <p>{bank.description}</p>
+        </div>
+        {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
+        {setupStep === "count" && (
+          <div className="quiz-choice-grid">
+            <button onClick={() => onStartQuiz(5)}>5 questions</button>
+            <button onClick={() => onStartQuiz(10)}>10 questions</button>
+            <button onClick={() => setSetupStep("topic")}>Topic quick-fire</button>
+          </div>
+        )}
+        {setupStep === "topic" && (
+          <>
+            <div className="quiz-subtitle">Choose a topic</div>
+            <div className="quiz-choice-grid">
+              {QUIZ_TOPICS.map((topic) => (
+                <button key={topic} onClick={() => setSetupStep(topic)}>{topic}</button>
+              ))}
+            </div>
+          </>
+        )}
+        {QUIZ_TOPICS.includes(setupStep) && (
+          <>
+            <div className="quiz-subtitle">How many?</div>
+            <div className="quiz-choice-grid two">
+              <button onClick={() => onStartQuiz(5, setupStep)}>5</button>
+              <button onClick={() => onStartQuiz(10, setupStep)}>10</button>
+            </div>
+            <button className="quiz-link-button" onClick={() => setSetupStep("topic")}>Change topic</button>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  if (quiz.quizState === "complete") {
+    const correctCount = quiz.score;
+    return (
+      <div className="quiz-panel">
+        <div className="quiz-heading">
+          <span>Quiz complete</span>
+          <h2>{bank.name}</h2>
+        </div>
+        {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
+        <div className="quiz-scoreboard">
+          <div>
+            <span>Score</span>
+            <strong>{correctCount}/{total}</strong>
+          </div>
+          <div>
+            <span>Percentage</span>
+            <strong>{percentage}%</strong>
+          </div>
+          <div>
+            <span>Attempted</span>
+            <strong>{total}</strong>
+          </div>
+          <div>
+            <span>Streak</span>
+            <strong>{quiz.streak}</strong>
+          </div>
+        </div>
+        <div className="quiz-summary-lines">
+          <p><strong>Strongest:</strong> {topicSummary.strongestTopic || "Not enough data yet"}</p>
+          <p><strong>Weakest:</strong> {topicSummary.weakestTopic || "Not enough data yet"}</p>
+          <p><strong>Weak topics:</strong> {topicSummary.weakTopics.length ? topicSummary.weakTopics.join(", ") : "None this round"}</p>
+        </div>
+        <div className="quiz-actions">
+          <button onClick={onQuizAgain}>Quiz me again</button>
+          <button onClick={onBackToWork}>Back to work</button>
+          <button onClick={onTakeFive}>Take 5</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!currentQuestion) {
+    return (
+      <div className="quiz-panel">
+        <p>No question is loaded yet.</p>
+      </div>
+    );
+  }
+
+  const locked = quiz.quizState === "showingResult";
+  return (
+    <div className="quiz-panel">
+      <div className="quiz-heading">
+        <span>{bank.name}</span>
+        <h2>Question {quiz.currentQuestionIndex + 1} of {total}</h2>
+        {quiz.shortfallNote && <p>{quiz.shortfallNote}</p>}
+      </div>
+      {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
+      <div className="quiz-meta-row">
+        <span>{currentQuestion.topic}</span>
+        <span>{currentQuestion.difficulty}</span>
+        <span>Score {quiz.score}/{total}</span>
+        <span>Streak {quiz.streak}</span>
+      </div>
+      <p className="quiz-question">{currentQuestion.question}</p>
+      <div className="quiz-answer-grid">
+        {currentQuestion.options.map((option, index) => {
+          const isSelected = latestAnswer?.selectedAnswerIndex === index;
+          const isCorrect = currentQuestion.correctAnswerIndex === index;
+          const resultClass = locked && isCorrect ? "correct" : locked && isSelected ? "incorrect" : "";
+          return (
+            <button
+              key={option}
+              className={resultClass}
+              onClick={() => onAnswer(index)}
+              disabled={locked}
+            >
+              {option}
+            </button>
+          );
+        })}
+      </div>
+      {locked && latestAnswer && (
+        <div className={latestAnswer.isCorrect ? "quiz-result correct" : "quiz-result incorrect"}>
+          <strong>{latestAnswer.isCorrect ? "Correct" : "Not quite"}</strong>
+          <p>{currentQuestion.explanation}</p>
+          <button onClick={onNext}>
+            {quiz.currentQuestionIndex + 1 === total ? "Finish quiz" : "Next question"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RevisionScores({ attempts, onBack }) {
+  return (
+    <div className="quiz-panel">
+      <div className="quiz-heading">
+        <span>Revision score</span>
+        <h2>Recent Avery quizzes</h2>
+      </div>
+      {!attempts.length && <p className="quiz-empty">No quiz attempts saved yet.</p>}
+      {attempts.length > 0 && (
+        <div className="revision-score-list">
+          {attempts.slice(0, 5).map((attempt) => (
+            <div key={`${attempt.date}-${attempt.completedQuestionIds.join("-")}`} className="revision-score-item">
+              <strong>{attempt.score}/{attempt.numberOfQuestions} · {attempt.percentage}%</strong>
+              <span>{attempt.topic || "Mixed quiz"} · {new Date(attempt.date).toLocaleDateString()}</span>
+              <small>{attempt.topicsMissed.length ? `Weak: ${attempt.topicsMissed.join(", ")}` : "No weak topics saved"}</small>
+            </div>
+          ))}
+        </div>
+      )}
+      <button className="quiz-link-button" onClick={onBack}>Back</button>
+    </div>
   );
 }
 
@@ -1150,4 +1597,8 @@ function SummaryModal({ summary, onRestart }) {
   );
 }
 
-createRoot(document.getElementById("root")).render(<App />);
+const rootElement = document.getElementById("root");
+if (!window.studyDoubleRoot) {
+  window.studyDoubleRoot = createRoot(rootElement);
+}
+window.studyDoubleRoot.render(<App />);
