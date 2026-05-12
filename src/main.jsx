@@ -81,6 +81,7 @@ const TALK_OPTIONS = [
 const DISPLAY_SIZES = ["comfortable", "large", "extra"];
 const QUIZ_STORAGE_KEY = "studyDoubleAveryQuizAttempts";
 const IMPORTED_QUIZ_BANKS_KEY = "studyDoubleImportedQuizBanks";
+const NOTEBOOKLM_STATIC_MESSAGE = "NotebookLM import needs local/server mode. GitHub Pages is static, so it cannot run the Playwright importer.";
 const QUIZ_TOPICS = [
   "Adult Choking",
   "Adult In-Hospital Resuscitation",
@@ -180,6 +181,11 @@ function getSavedImportedQuestionBanks() {
 function saveImportedQuestionBanks(banks) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(IMPORTED_QUIZ_BANKS_KEY, JSON.stringify(banks.slice(0, 10)));
+}
+
+function isStaticGithubPages() {
+  if (typeof window === "undefined") return false;
+  return window.location.hostname.endsWith("github.io");
 }
 
 function getBankTopics(bank) {
@@ -711,6 +717,13 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const importNotebookLmQuiz = async () => {
+    if (isStaticGithubPages()) {
+      setNotebookImportStatus("error");
+      setNotebookImportError(NOTEBOOKLM_STATIC_MESSAGE);
+      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
+      return;
+    }
+
     const url = notebookImportUrl.trim();
     if (!url) {
       setNotebookImportStatus("error");
@@ -767,6 +780,13 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const refreshNotebookLmAuthStatus = async () => {
+    if (isStaticGithubPages()) {
+      const status = { connected: false, authInProgress: false, unavailable: true };
+      setNotebookAuthStatus(status);
+      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
+      return status;
+    }
+
     try {
       const response = await fetch("/api/notebooklm-auth/status");
       const status = await response.json();
@@ -779,6 +799,11 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const startNotebookLmLogin = async () => {
+    if (isStaticGithubPages()) {
+      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
+      return;
+    }
+
     setNotebookAuthMessage("Opening NotebookLM sign-in window...");
     try {
       const response = await fetch("/api/notebooklm-auth/start", { method: "POST" });
@@ -792,6 +817,11 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const finishNotebookLmLogin = async () => {
+    if (isStaticGithubPages()) {
+      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
+      return;
+    }
+
     setNotebookAuthMessage("Saving NotebookLM session...");
     try {
       const response = await fetch("/api/notebooklm-auth/finish", { method: "POST" });
@@ -805,6 +835,11 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const disconnectNotebookLmLogin = async () => {
+    if (isStaticGithubPages()) {
+      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
+      return;
+    }
+
     try {
       const response = await fetch("/api/notebooklm-auth/disconnect", { method: "POST" });
       const status = await response.json();
@@ -1746,7 +1781,10 @@ function NotebookLmImportModal({
         <label className="quiz-import-field">
           <span>Artifact URL</span>
           <input
-            type="url"
+            type="text"
+            inputMode="url"
+            autoCapitalize="none"
+            spellCheck="false"
             value={url}
             onChange={(event) => onUrlChange(event.target.value)}
             placeholder="https://notebooklm.google.com/..."
