@@ -31,7 +31,7 @@ export const AVERY_SEQUENCES = {
     id: "sessionStart",
     trigger: "sessionStart",
     averyLine: "I'm settling in now. You do not need to feel ready. Just come back to the next small bit.",
-    visualState: "startingWork",
+    visualState: "workingStart",
     requiresUserAnswer: false,
     options: [],
     afterChoice: {},
@@ -43,7 +43,7 @@ export const AVERY_SEQUENCES = {
     id: "readyToStart",
     trigger: "I'm ready to start",
     averyLine: "Okay, I'm starting too. Let's just get the first small bit done.",
-    visualState: "engagedListening",
+    visualState: "engaging",
     requiresUserAnswer: false,
     options: [],
     afterChoice: {},
@@ -55,7 +55,7 @@ export const AVERY_SEQUENCES = {
     id: "musicPrompt",
     trigger: "Change the music",
     averyLine: "Should I play some music while we study?",
-    visualState: "engagedListening",
+    visualState: "engaging",
     requiresUserAnswer: true,
     options: [
       { id: "lofi", label: "Lofi", outcome: "playMusic", trackKey: "lofi" },
@@ -68,7 +68,7 @@ export const AVERY_SEQUENCES = {
       piano: "Good choice. Something gentle in the background.",
       nature: "Lovely. Let's keep the room calm.",
       none: "Okay, quiet room it is.",
-      missingAudio: "I can't find that music file yet, but we can keep studying."
+      missingAudio: "Tap again to start audio."
     },
     autoReturnToWork: false,
     backToWorkLine: "I'm going back to my notes now.",
@@ -78,7 +78,7 @@ export const AVERY_SEQUENCES = {
     id: "breakPrompt",
     trigger: "I want to take a break",
     averyLine: "Can you do 10 more minutes with me first? I'm just getting into it.",
-    visualState: "engagedListening",
+    visualState: "engaging",
     requiresUserAnswer: true,
     options: [
       { id: "tenMore", label: "Yes, I'll try 10 more minutes", outcome: "startMiniSprint" },
@@ -98,7 +98,7 @@ export const AVERY_SEQUENCES = {
     id: "backFromBreak",
     trigger: "I'm back",
     averyLine: "Good, I'm back too. Let's ease in. Let's prove to your brain that starting again is possible.",
-    visualState: "engagedListening",
+    visualState: "engaging",
     requiresUserAnswer: false,
     options: [],
     afterChoice: {},
@@ -110,7 +110,7 @@ export const AVERY_SEQUENCES = {
     id: "strugglingToFocus",
     trigger: "I'm struggling to focus",
     averyLine: "Same. Let's make this smaller until it becomes possible. Pick one tiny thing and do just that.",
-    visualState: "engagedListening",
+    visualState: "engaging",
     requiresUserAnswer: true,
     options: [
       { id: "focusSprint", label: "Start a 10-minute focus sprint", outcome: "startMiniSprint" },

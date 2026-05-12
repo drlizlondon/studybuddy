@@ -5,4 +5,5 @@ screenshots/
 shots/
 .env
 .env.local
+.studybuddy-auth/
 npm-debug.log*

@@ -48,21 +48,21 @@ const SCRIPTED_EVENTS = [
 const TRACKS = {
   lofi: { name: "Lofi", src: assetUrl("/audio/lofi-study.mp3") },
   piano: { name: "Revision piano", src: assetUrl("/audio/revision-piano.mp3") },
-  nature: { name: "Nature sounds", src: assetUrl("/audio/nature-sounds.mp3") },
-  quiet: { name: "Quiet room", src: "" }
+  nature: { name: "Nature sounds", src: assetUrl("/audio/nature-sounds.mp3") }
 };
 
 const VIDEO_MEDIA = {
   day: {
-    start: assetUrl("/video/day/day-working-start.mp4"),
-    loop: assetUrl("/video/day/day-working-loop.mp4"),
+    workingStart: assetUrl("/video/day/day-working-start.mp4"),
+    workingLoop: assetUrl("/video/day/day-working-loop.mp4"),
     engaging: assetUrl("/video/day/day-engaging.mp4"),
     fallback: assetUrl("/images/master-day-frame.png")
   },
   evening: {
-    start: assetUrl("/video/evening/evening-working-start.mp4"),
-    loop: assetUrl("/video/evening/evening-working-loop.mp4"),
-    engagingStill: assetUrl("/images/evening-engaging-still.png"),
+    workingStart: assetUrl("/video/evening/evening-working-start.mp4"),
+    workingLoop: assetUrl("/video/evening/evening-working-loop.mp4"),
+    engaging: assetUrl("/video/evening/evening-engaging.mp4"),
+    engagingFallback: assetUrl("/images/evening-engaging-still.png"),
     fallback: assetUrl("/images/master-evening-frame.png")
   }
 };
@@ -80,6 +80,7 @@ const TALK_OPTIONS = [
 
 const DISPLAY_SIZES = ["comfortable", "large", "extra"];
 const QUIZ_STORAGE_KEY = "studyDoubleAveryQuizAttempts";
+const IMPORTED_QUIZ_BANKS_KEY = "studyDoubleImportedQuizBanks";
 const QUIZ_TOPICS = [
   "Adult Choking",
   "Adult In-Hospital Resuscitation",
@@ -142,6 +143,47 @@ function getSavedQuizAttempts() {
 function saveQuizAttempts(attempts) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempts.slice(0, 12)));
+}
+
+function normaliseQuestionBank(bank) {
+  const id = bank?.id || `imported-${Date.now()}`;
+  const questions = Array.isArray(bank?.questions) ? bank.questions : [];
+  return {
+    id,
+    name: bank?.name || "Imported NotebookLM Quiz",
+    description: bank?.description || "Imported from a shared NotebookLM artifact.",
+    source: bank?.source || "NotebookLM shared artifact",
+    importedAt: bank?.importedAt || new Date().toISOString(),
+    questions: questions.map((question, index) => ({
+      id: question.id || `${id}_${String(index + 1).padStart(3, "0")}`,
+      topic: question.topic || "Imported",
+      difficulty: ["easy", "medium", "hard"].includes(question.difficulty) ? question.difficulty : "medium",
+      question: question.question || "",
+      options: Array.isArray(question.options) ? question.options.slice(0, 4) : [],
+      correctAnswerIndex: Number.isInteger(question.correctAnswerIndex) ? question.correctAnswerIndex : null,
+      explanation: question.explanation || "",
+      tags: Array.isArray(question.tags) ? question.tags : ["notebooklm", "imported"]
+    })).filter((question) => question.question && question.options.length >= 2)
+  };
+}
+
+function getSavedImportedQuestionBanks() {
+  if (typeof window === "undefined") return [];
+  try {
+    const banks = JSON.parse(window.localStorage.getItem(IMPORTED_QUIZ_BANKS_KEY) || "[]");
+    return Array.isArray(banks) ? banks.map(normaliseQuestionBank).filter((bank) => bank.questions.length) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveImportedQuestionBanks(banks) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(IMPORTED_QUIZ_BANKS_KEY, JSON.stringify(banks.slice(0, 10)));
+}
+
+function getBankTopics(bank) {
+  return [...new Set((bank?.questions || []).map((question) => question.topic).filter(Boolean))];
 }
 
 function shuffleItems(items) {
@@ -335,6 +377,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [isBreak, setIsBreak] = useState(false);
   const [breakLength, setBreakLength] = useState(0);
   const [message, setMessage] = useState(AVERY_SEQUENCES.sessionStart.averyLine);
+  const [isMessageVisible, setIsMessageVisible] = useState(true);
   const [messageKey, setMessageKey] = useState(1);
   const [talkOpen, setTalkOpen] = useState(false);
   const [talkActions, setTalkActions] = useState([]);
@@ -348,7 +391,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [audioChecked, setAudioChecked] = useState(false);
   const [miniSprintRemaining, setMiniSprintRemaining] = useState(0);
   const [averyBoost, setAveryBoost] = useState(0);
-  const [conversationState, setConversationState] = useState("returningToWork");
+  const [conversationState, setConversationState] = useState("closed");
   const [activeSequenceId, setActiveSequenceId] = useState("sessionStart");
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [threadNodeId, setThreadNodeId] = useState("start");
@@ -365,12 +408,23 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [quizSetupStep, setQuizSetupStep] = useState("count");
   const [showRevisionScores, setShowRevisionScores] = useState(false);
   const [quizAttempts, setQuizAttempts] = useState(getSavedQuizAttempts);
+  const [importedQuestionBanks, setImportedQuestionBanks] = useState(getSavedImportedQuestionBanks);
+  const [activeQuestionBankId, setActiveQuestionBankId] = useState(resusCouncilAdult2025.id);
+  const [notebookImportOpen, setNotebookImportOpen] = useState(false);
+  const [notebookImportUrl, setNotebookImportUrl] = useState("");
+  const [notebookImportStatus, setNotebookImportStatus] = useState("idle");
+  const [notebookImportError, setNotebookImportError] = useState("");
+  const [notebookImportPreview, setNotebookImportPreview] = useState(null);
+  const [notebookAuthStatus, setNotebookAuthStatus] = useState({ connected: false, authInProgress: false });
+  const [notebookAuthMessage, setNotebookAuthMessage] = useState("");
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 0 : window.innerWidth,
     height: typeof window === "undefined" ? 0 : window.innerHeight
   }));
   const [summary, setSummary] = useState(null);
+  const [hasPlayedWorkingStart, setHasPlayedWorkingStart] = useState(false);
   const audioRef = useRef(null);
+  const isMusicPlayingRef = useRef(false);
   const sprintWasActiveRef = useRef(false);
   const averyTask = useMemo(() => AVERY_TASKS[Math.floor(Math.random() * AVERY_TASKS.length)], []);
   const elapsedSeconds = totalSeconds - remaining;
@@ -378,28 +432,29 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const progress = Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 88 + averyBoost));
   const sprintActive = miniSprintRemaining > 0;
   const isQuizActive = quiz.quizState !== "inactive";
-  const hasActiveMessage = messageKey > 0 && !["closed", "open"].includes(conversationState);
+  const questionBanks = useMemo(() => [resusCouncilAdult2025, ...importedQuestionBanks], [importedQuestionBanks]);
+  const activeQuestionBank = questionBanks.find((bank) => bank.id === activeQuestionBankId) || resusCouncilAdult2025;
+  const hasActiveMessage = isMessageVisible && messageKey > 0;
   const averyVisualState = useMemo(() => {
-    if (isQuizActive) return "engagedListening";
-    if (["open", "averySpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
-      return "engagedListening";
+    if (isQuizActive || showBreakPrompt || ["open", "averySpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
+      return "engaging";
     }
-    if (conversationState === "returningToWork") return "startingWork";
-    return "passiveWorking";
-  }, [conversationState, isQuizActive]);
+    if (!hasPlayedWorkingStart) return "workingStart";
+    return "workingLoop";
+  }, [conversationState, hasPlayedWorkingStart, isQuizActive, showBreakPrompt]);
 
   const say = (text, actions = []) => {
     setMessage(text);
+    setIsMessageVisible(true);
     setTalkActions(actions);
     setMessageKey((value) => value + 1);
   };
 
   const changeTheme = () => {
-    setTheme((value) => {
-      const next = value === "day" ? "evening" : "day";
-      onThemeChange?.(next);
-      return next;
-    });
+    setHasPlayedWorkingStart(true);
+    const next = theme === "day" ? "evening" : "day";
+    setTheme(next);
+    onThemeChange?.(next);
   };
 
   useEffect(() => {
@@ -439,20 +494,16 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       setShownEvents((events) => [...events, -5]);
     }
     if (session.breakPrompts && elapsedMinutes >= 75 && !shownEvents.includes(750) && !isBreak) {
+      setHasPlayedWorkingStart(true);
       setShowBreakPrompt(true);
       setShownEvents((events) => [...events, 750]);
     }
   }, [elapsedMinutes, isBreak, session.breakPrompts, session.durationMinutes, shownEvents, summary]);
 
   useEffect(() => {
-    if (!audioRef.current) return;
-    if (trackKey) audioRef.current.src = TRACKS[trackKey].src;
-  }, [trackKey]);
-
-  useEffect(() => {
     let cancelled = false;
     Promise.all(
-      Object.values(TRACKS).map((track) =>
+      Object.values(TRACKS).filter((track) => track.src).map((track) =>
         fetch(track.src, { cache: "no-store" })
           .then((response) => response.ok && (response.headers.get("content-type") || "").startsWith("audio/"))
           .catch(() => false)
@@ -471,6 +522,36 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   useEffect(() => {
     if (audioRef.current) audioRef.current.volume = volume;
   }, [volume]);
+
+  useEffect(() => {
+    if (!isMessageVisible) return undefined;
+    const shouldKeepVisible =
+      talkActions.length > 0 ||
+      talkOpen ||
+      musicPrompt ||
+      showBreakPrompt ||
+      isQuizActive ||
+      isBreak ||
+      ["open", "waitingForUser"].includes(conversationState);
+
+    if (shouldKeepVisible) return undefined;
+
+    const dismissTimer = window.setTimeout(() => {
+      setIsMessageVisible(false);
+    }, 5000);
+
+    return () => window.clearTimeout(dismissTimer);
+  }, [
+    conversationState,
+    isBreak,
+    isMessageVisible,
+    isQuizActive,
+    messageKey,
+    musicPrompt,
+    showBreakPrompt,
+    talkActions.length,
+    talkOpen
+  ]);
 
   useEffect(() => {
     const syncFullscreen = () => {
@@ -517,8 +598,11 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   }, [miniSprintRemaining, summary]);
 
   const setAveryVisualState = (state) => {
-    if (state === "engagedListening") setConversationState("averySpeaking");
-    else if (state === "startingWork") setConversationState("returningToWork");
+    if (state === "engaging") {
+      setHasPlayedWorkingStart(true);
+      setConversationState("averySpeaking");
+    }
+    else if (state === "workingStart" || state === "workingLoop") setConversationState("closed");
     else setConversationState("closed");
   };
 
@@ -553,14 +637,49 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     action: () => returnToWork()
   });
 
+  const isCurrentPlayingTrack = (key) => {
+    const track = TRACKS[key];
+    const audio = audioRef.current;
+    if (!track?.src || !audio) return false;
+    const currentAudioSrc = audio.getAttribute("src") || "";
+    const currentResolvedSrc = audio.currentSrc || "";
+    const trackPath = track.src.replace(/^\/+/, "");
+    const sameSource =
+      trackKey === key ||
+      currentAudioSrc === track.src ||
+      currentAudioSrc.endsWith(track.src) ||
+      currentResolvedSrc.endsWith(track.src) ||
+      currentResolvedSrc.includes(trackPath);
+    return sameSource && (isMusicPlayingRef.current || !audio.paused);
+  };
+
+  const pauseCurrentTrack = () => {
+    audioRef.current?.pause();
+    isMusicPlayingRef.current = false;
+    setIsMusicPlaying(false);
+  };
+
+  const resolveSequenceOption = (option) => {
+    if (option.outcome === "playMusic" && option.trackKey && isCurrentPlayingTrack(option.trackKey)) {
+      pauseCurrentTrack();
+      setMusicPrompt(false);
+      setConversationState("resolving");
+      say("Okay, quiet room it is.", [buildBackToWorkAction()]);
+      return;
+    }
+    resolveAveryChoice(option);
+  };
+
   const enterQuizSetup = () => {
+    setHasPlayedWorkingStart(true);
     setTalkOpen(true);
     setShowRevisionScores(false);
+    setNotebookImportOpen(false);
     setQuizSetupStep("count");
     setQuiz({
       ...createInactiveQuizState(),
       quizState: "setup",
-      activeQuestionBankId: resusCouncilAdult2025.id,
+      activeQuestionBankId: activeQuestionBank.id,
       averyLine: "Okay. I'll test you properly. How many questions?"
     });
     setConversationState("waitingForUser");
@@ -568,7 +687,8 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const startQuiz = (amount, topic = null) => {
-    const { selected, shortfallNote } = pickQuizQuestions(resusCouncilAdult2025, amount, topic);
+    const bank = activeQuestionBank;
+    const { selected, shortfallNote } = pickQuizQuestions(bank, amount, topic);
     if (!selected.length) {
       say("I can't find questions for that topic yet. Pick another one and we'll keep going.");
       setQuizSetupStep("topic");
@@ -579,7 +699,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setQuiz({
       ...createInactiveQuizState(),
       quizState: "askingQuestion",
-      activeQuestionBankId: resusCouncilAdult2025.id,
+      activeQuestionBankId: bank.id,
       selectedTopic: topic,
       selectedQuestions: selected,
       startedAt: new Date().toISOString(),
@@ -588,6 +708,111 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     });
     setConversationState("waitingForUser");
     say(shortfallNote || "Question one. Take it carefully.");
+  };
+
+  const importNotebookLmQuiz = async () => {
+    const url = notebookImportUrl.trim();
+    if (!url) {
+      setNotebookImportStatus("error");
+      setNotebookImportError("Paste a shared NotebookLM artifact URL first.");
+      return;
+    }
+
+    setNotebookImportStatus("loading");
+    setNotebookImportError("");
+    setNotebookImportPreview(null);
+
+    try {
+      const response = await fetch("/api/import-notebooklm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || "Import failed.");
+      const bank = normaliseQuestionBank(result.questionBank);
+      if (!bank.questions.length) throw new Error("No quiz questions were detected in that NotebookLM artifact.");
+      setNotebookImportPreview(bank);
+      setNotebookImportStatus("success");
+    } catch (error) {
+      setNotebookImportStatus("error");
+      setNotebookImportError(error.message || "Parsing failed. Try a public NotebookLM quiz artifact link.");
+    }
+  };
+
+  const saveNotebookLmImport = () => {
+    if (!notebookImportPreview?.questions?.length) return;
+    const bank = {
+      ...notebookImportPreview,
+      id: notebookImportPreview.id || `notebooklm-${Date.now()}`,
+      importedAt: new Date().toISOString()
+    };
+    setImportedQuestionBanks((banks) => {
+      const updated = [bank, ...banks.filter((item) => item.id !== bank.id)].slice(0, 10);
+      saveImportedQuestionBanks(updated);
+      return updated;
+    });
+    setActiveQuestionBankId(bank.id);
+    setNotebookImportOpen(false);
+    setNotebookImportStatus("idle");
+    setNotebookImportUrl("");
+    setNotebookImportPreview(null);
+    setQuizSetupStep("count");
+    setQuiz((current) => ({
+      ...current,
+      activeQuestionBankId: bank.id,
+      averyLine: `Saved ${bank.questions.length} questions to Avery.`
+    }));
+    say(`Saved ${bank.questions.length} questions to Avery.`);
+  };
+
+  const refreshNotebookLmAuthStatus = async () => {
+    try {
+      const response = await fetch("/api/notebooklm-auth/status");
+      const status = await response.json();
+      setNotebookAuthStatus(status);
+      return status;
+    } catch {
+      setNotebookAuthMessage("Could not check NotebookLM connection.");
+      return null;
+    }
+  };
+
+  const startNotebookLmLogin = async () => {
+    setNotebookAuthMessage("Opening NotebookLM sign-in window...");
+    try {
+      const response = await fetch("/api/notebooklm-auth/start", { method: "POST" });
+      const status = await response.json();
+      if (!response.ok) throw new Error(status.error || "Could not open NotebookLM sign-in window.");
+      setNotebookAuthStatus(status);
+      setNotebookAuthMessage(status.message || "Sign in, then press Done signing in.");
+    } catch (error) {
+      setNotebookAuthMessage(error.message || "Could not open NotebookLM sign-in window.");
+    }
+  };
+
+  const finishNotebookLmLogin = async () => {
+    setNotebookAuthMessage("Saving NotebookLM session...");
+    try {
+      const response = await fetch("/api/notebooklm-auth/finish", { method: "POST" });
+      const status = await response.json();
+      if (!response.ok) throw new Error(status.error || "Could not save NotebookLM session.");
+      setNotebookAuthStatus(status);
+      setNotebookAuthMessage(status.message || "NotebookLM connected locally.");
+    } catch (error) {
+      setNotebookAuthMessage(error.message || "Could not save NotebookLM session.");
+    }
+  };
+
+  const disconnectNotebookLmLogin = async () => {
+    try {
+      const response = await fetch("/api/notebooklm-auth/disconnect", { method: "POST" });
+      const status = await response.json();
+      setNotebookAuthStatus(status);
+      setNotebookAuthMessage("NotebookLM disconnected locally.");
+    } catch {
+      setNotebookAuthMessage("Could not disconnect NotebookLM.");
+    }
   };
 
   const answerQuizQuestion = (answerIndex) => {
@@ -689,6 +914,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setQuiz(createInactiveQuizState());
     setQuizSetupStep("count");
     setShowRevisionScores(false);
+    setNotebookImportOpen(false);
     setMusicPrompt(false);
     setShowBreakPrompt(false);
     setActiveSequenceId(null);
@@ -697,10 +923,11 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setTalkActions([]);
     if (line) say(line);
     setPendingBackToWorkLine("");
-    setConversationState("returningToWork");
+    setConversationState("closed");
   };
 
   const handleStartingWorkEnded = () => {
+    setHasPlayedWorkingStart(true);
     setConversationState("closed");
     setTalkActions([]);
     setMusicPrompt(false);
@@ -715,7 +942,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setPendingBackToWorkLine(sequence.backToWorkLine || "");
     setMusicPrompt(sequence.id === "musicPrompt");
     setShowBreakPrompt(false);
-    setAveryVisualState(sequence.visualState || "engagedListening");
+    setAveryVisualState(sequence.visualState || "engaging");
 
     if (sequence.requiresUserAnswer) {
       setConversationState("waitingForUser");
@@ -723,7 +950,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         sequence.averyLine,
         sequence.options.map((option) => ({
           label: option.label,
-          action: () => resolveAveryChoice(option)
+          action: () => resolveSequenceOption(option)
         }))
       );
       return;
@@ -738,6 +965,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const runAveryThread = (trigger) => {
     const candidates = getThreadsByTrigger(trigger);
     if (!candidates.length) return;
+    setHasPlayedWorkingStart(true);
     const notRecentlyCompleted = candidates.filter((thread) => !completedThreadIds.includes(thread.id));
     const thread = notRecentlyCompleted[0] || candidates[0];
     setTalkOpen(false);
@@ -799,13 +1027,17 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     let line = sequence.afterChoice[choice.id] || sequence.backToWorkLine || "Okay.";
 
     if (outcome === "playMusic" && choice.trackKey) {
-      const didStart = await chooseTrack(choice.trackKey, { silent: true });
-      if (!didStart) line = sequence.afterChoice.missingAudio;
+      if (isCurrentPlayingTrack(choice.trackKey)) {
+        pauseCurrentTrack();
+        setMusicPrompt(false);
+        line = "Okay, quiet room it is.";
+      } else {
+        const didStart = await chooseTrack(choice.trackKey, { silent: true });
+        if (!didStart) line = sequence.afterChoice.missingAudio;
+      }
     }
     if (choice.id === "none" && sequence.id === "musicPrompt") {
-      setTrackKey("quiet");
-      setIsMusicPlaying(false);
-      audioRef.current?.pause();
+      await chooseTrack("quiet", { silent: true });
     }
     if (outcome !== "playMusic") applyOutcome(outcome, choice);
 
@@ -827,6 +1059,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const startBreak = (minutes) => {
+    setHasPlayedWorkingStart(true);
     setIsBreak(true);
     setBreakLength(minutes);
     setShowBreakPrompt(false);
@@ -871,48 +1104,93 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
 
   const handleTrackError = () => {
     setIsMusicPlaying(false);
-    setAudioAvailable(false);
-    say("I can't find that music file yet, but we can keep studying.", [buildBackToWorkAction()]);
+    say("Tap again to start audio.");
   };
 
   const chooseTrack = async (key, options = {}) => {
     if (key === "quiet") {
       audioRef.current?.pause();
-      setTrackKey("quiet");
+      if (audioRef.current) {
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
+      }
+      setTrackKey(null);
       setIsMusicPlaying(false);
+      isMusicPlayingRef.current = false;
+      setMusicPrompt(false);
       return true;
     }
 
     const track = TRACKS[key];
     if (!track?.src || !audioRef.current) {
-      if (!options.silent) say("I can't find that music file yet, but we can keep studying.", [buildBackToWorkAction()]);
+      if (!options.silent) say("Tap again to start audio.");
       return false;
+    }
+
+    const currentAudioSrc = audioRef.current.getAttribute("src") || "";
+    const currentResolvedSrc = audioRef.current.currentSrc || "";
+    const trackPath = track.src.replace(/^\/+/, "");
+    const isCurrentTrack =
+      trackKey === key ||
+      currentAudioSrc === track.src ||
+      currentAudioSrc.endsWith(track.src) ||
+      currentResolvedSrc.endsWith(track.src) ||
+      currentResolvedSrc.includes(trackPath);
+    if (isCurrentTrack && (isMusicPlayingRef.current || !audioRef.current.paused)) {
+      audioRef.current.pause();
+      setIsMusicPlaying(false);
+      isMusicPlayingRef.current = false;
+      setMusicPrompt(false);
+      return true;
     }
 
     setTrackKey(key);
     setMusicPrompt(false);
     try {
+      audioRef.current.pause();
       audioRef.current.src = track.src;
       audioRef.current.load();
       await audioRef.current.play();
       setAudioAvailable(true);
       setIsMusicPlaying(true);
+      isMusicPlayingRef.current = true;
       return true;
     } catch {
       setIsMusicPlaying(false);
-      if (!options.silent) say("I can't find that music file yet, but we can keep studying.", [buildBackToWorkAction()]);
+      isMusicPlayingRef.current = false;
+      if (!options.silent) say("Tap again to start audio.");
       return false;
     }
   };
 
   const toggleMusic = () => {
-    if (!trackKey || trackKey === "quiet" || !audioRef.current || !audioAvailable) return;
+    if (!trackKey || !audioRef.current || !audioAvailable) return;
     if (isMusicPlaying) {
       audioRef.current.pause();
       setIsMusicPlaying(false);
+      isMusicPlayingRef.current = false;
     } else {
-      audioRef.current.play().then(() => setIsMusicPlaying(true)).catch(() => setIsMusicPlaying(false));
+      audioRef.current.play().then(() => setIsMusicPlaying(true)).catch(() => {
+        setIsMusicPlaying(false);
+        isMusicPlayingRef.current = false;
+        say("Tap again to start audio.");
+      });
     }
+  };
+
+  const handleAudioPlay = () => {
+    isMusicPlayingRef.current = true;
+    setIsMusicPlaying(true);
+  };
+
+  const handleAudioPause = () => {
+    isMusicPlayingRef.current = false;
+    setIsMusicPlaying(false);
+  };
+
+  const handleAudioEnded = () => {
+    isMusicPlayingRef.current = false;
+    setIsMusicPlaying(false);
   };
 
   const toggleFullscreen = () => {
@@ -928,7 +1206,15 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       ref={roomRef}
       className={`study-room ${theme} text-${displaySize} ${isFullscreen ? "fullscreen-active" : ""} ${talkOpen ? "talk-open" : ""} ${musicPrompt ? "music-open" : ""} ${isQuizActive ? "quiz-open" : ""} ${hasActiveMessage || talkActions.length || isBreak || showBreakPrompt || isQuizActive ? "context-open" : ""}`}
     >
-      <audio ref={audioRef} loop onError={handleTrackError} />
+      <audio
+        ref={audioRef}
+        loop
+        preload="metadata"
+        onEnded={handleAudioEnded}
+        onError={handleTrackError}
+        onPause={handleAudioPause}
+        onPlay={handleAudioPlay}
+      />
       <RoomScene theme={theme} averyVisualState={averyVisualState} onStartingWorkEnded={handleStartingWorkEnded} />
 
       <section className="display-settings">
@@ -1032,42 +1318,44 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         <div className="sprint-badge">10-minute push · {formatTime(miniSprintRemaining)}</div>
       )}
 
-      <section key={messageKey} className="message-card floating-card">
-        <div className="avatar-mini"><AveryPortrait /></div>
-        <div>
-          <p>{message}</p>
-          {musicPrompt && (
-            <div className="music-options">
-              {audioChecked && !audioAvailable && <span className="audio-note">Add audio files to /public/audio to enable music.</span>}
-            </div>
-          )}
-          {showBreakPrompt && (
-            <div className="music-options">
-              <button onClick={() => setShowBreakPrompt(false)}>Keep going</button>
-              <button onClick={() => startBreak(5)}>Take 5</button>
-              <button onClick={() => startBreak(15)}>Take 15</button>
-            </div>
-          )}
-          {talkActions.length > 0 && (
-            <div className="talk-actions">
-              {talkActions.map((action) => (
-                <button key={action.label} onClick={action.action}>{action.label}</button>
-              ))}
-            </div>
-          )}
-          {isBreak && (
-            <button className="return-button" onClick={returnFromBreak}>
-              Tell Avery when you're back
-            </button>
-          )}
-        </div>
-      </section>
+      {isMessageVisible && (
+        <section key={messageKey} className="message-card floating-card">
+          <div className="avatar-mini"><AveryPortrait /></div>
+          <div>
+            <p>{message}</p>
+            {musicPrompt && (
+              <div className="music-options">
+                {audioChecked && !audioAvailable && <span className="audio-note">Add audio files to /public/audio to enable music.</span>}
+              </div>
+            )}
+            {showBreakPrompt && (
+              <div className="music-options">
+                <button onClick={() => setShowBreakPrompt(false)}>Keep going</button>
+                <button onClick={() => startBreak(5)}>Take 5</button>
+                <button onClick={() => startBreak(15)}>Take 15</button>
+              </div>
+            )}
+            {talkActions.length > 0 && (
+              <div className="talk-actions">
+                {talkActions.map((action) => (
+                  <button key={action.label} onClick={action.action}>{action.label}</button>
+                ))}
+              </div>
+            )}
+            {isBreak && (
+              <button className="return-button" onClick={returnFromBreak}>
+                Tell Avery when you're back
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className="vibe-card floating-card">
         <h2>Avery's vibe</h2>
         <div className="vibe-line"><Headphones size={18} /> {trackKey ? TRACKS[trackKey].name : "Quiet room"}</div>
         {audioChecked && !audioAvailable && <p className="audio-note">Add audio files to /public/audio to enable music.</p>}
-        <button onClick={toggleMusic} disabled={!trackKey || trackKey === "quiet" || !audioAvailable}>
+        <button onClick={toggleMusic} disabled={!trackKey || !audioAvailable}>
           {isMusicPlaying ? <Pause size={16} /> : <Play size={16} />}
           {isMusicPlaying ? "Pause" : "Play"}
         </button>
@@ -1098,6 +1386,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
           onClick={() => {
             if (talkOpen) closeAveryInteraction();
             else {
+              setHasPlayedWorkingStart(true);
               setTalkOpen(true);
               setShowRevisionScores(false);
               setConversationState("open");
@@ -1117,16 +1406,37 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             </button>
             {isQuizActive ? (
               <QuizPanel
-                bank={resusCouncilAdult2025}
+                bank={activeQuestionBank}
+                banks={questionBanks}
                 quiz={quiz}
                 setupStep={quizSetupStep}
                 setSetupStep={setQuizSetupStep}
+                activeBankId={activeQuestionBankId}
+                onSelectBank={setActiveQuestionBankId}
                 onStartQuiz={startQuiz}
                 onAnswer={answerQuizQuestion}
                 onNext={goToNextQuizQuestion}
                 onQuizAgain={enterQuizSetup}
                 onBackToWork={quizBackToWork}
                 onTakeFive={quizTakeFive}
+                notebookImportOpen={notebookImportOpen}
+                importUrl={notebookImportUrl}
+                importStatus={notebookImportStatus}
+                importError={notebookImportError}
+                importPreview={notebookImportPreview}
+                authStatus={notebookAuthStatus}
+                authMessage={notebookAuthMessage}
+                onOpenNotebookImport={() => {
+                  setNotebookImportOpen(true);
+                  refreshNotebookLmAuthStatus();
+                }}
+                onCloseNotebookImport={() => setNotebookImportOpen(false)}
+                onImportUrlChange={setNotebookImportUrl}
+                onImportNotebookLm={importNotebookLmQuiz}
+                onSaveNotebookLmImport={saveNotebookLmImport}
+                onStartNotebookLmLogin={startNotebookLmLogin}
+                onFinishNotebookLmLogin={finishNotebookLmLogin}
+                onDisconnectNotebookLmLogin={disconnectNotebookLmLogin}
               />
             ) : showRevisionScores ? (
               <RevisionScores attempts={quizAttempts} onBack={() => setShowRevisionScores(false)} />
@@ -1158,21 +1468,40 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
 
 function QuizPanel({
   bank,
+  banks,
   quiz,
   setupStep,
   setSetupStep,
+  activeBankId,
+  onSelectBank,
   onStartQuiz,
   onAnswer,
   onNext,
   onQuizAgain,
   onBackToWork,
-  onTakeFive
+  onTakeFive,
+  notebookImportOpen,
+  importUrl,
+  importStatus,
+  importError,
+  importPreview,
+  authStatus,
+  authMessage,
+  onOpenNotebookImport,
+  onCloseNotebookImport,
+  onImportUrlChange,
+  onImportNotebookLm,
+  onSaveNotebookLmImport,
+  onStartNotebookLmLogin,
+  onFinishNotebookLmLogin,
+  onDisconnectNotebookLmLogin
 }) {
   const currentQuestion = quiz.selectedQuestions[quiz.currentQuestionIndex];
   const latestAnswer = quiz.answers[quiz.answers.length - 1];
   const total = quiz.selectedQuestions.length;
   const percentage = total ? Math.round((quiz.score / total) * 100) : 0;
   const topicSummary = getTopicSummary(quiz.answers);
+  const bankTopics = getBankTopics(bank);
 
   if (quiz.quizState === "setup") {
     return (
@@ -1183,6 +1512,26 @@ function QuizPanel({
           <p>{bank.description}</p>
         </div>
         {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
+        <div className="quiz-import-row">
+          <button className="quiz-link-button" onClick={onOpenNotebookImport}>Import from NotebookLM</button>
+        </div>
+        {banks.length > 1 && (
+          <>
+            <div className="quiz-subtitle">Question bank</div>
+            <div className="quiz-choice-grid">
+              {banks.map((item) => (
+                <button
+                  key={item.id}
+                  className={item.id === activeBankId ? "active" : ""}
+                  onClick={() => onSelectBank(item.id)}
+                >
+                  {item.name}
+                  <small>{item.questions.length} questions</small>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
         {setupStep === "count" && (
           <div className="quiz-choice-grid">
             <button onClick={() => onStartQuiz(5)}>5 questions</button>
@@ -1194,13 +1543,13 @@ function QuizPanel({
           <>
             <div className="quiz-subtitle">Choose a topic</div>
             <div className="quiz-choice-grid">
-              {QUIZ_TOPICS.map((topic) => (
+              {(bankTopics.length ? bankTopics : QUIZ_TOPICS).map((topic) => (
                 <button key={topic} onClick={() => setSetupStep(topic)}>{topic}</button>
               ))}
             </div>
           </>
         )}
-        {QUIZ_TOPICS.includes(setupStep) && (
+        {(bankTopics.length ? bankTopics : QUIZ_TOPICS).includes(setupStep) && (
           <>
             <div className="quiz-subtitle">How many?</div>
             <div className="quiz-choice-grid two">
@@ -1209,6 +1558,23 @@ function QuizPanel({
             </div>
             <button className="quiz-link-button" onClick={() => setSetupStep("topic")}>Change topic</button>
           </>
+        )}
+        {notebookImportOpen && (
+          <NotebookLmImportModal
+            url={importUrl}
+            status={importStatus}
+            error={importError}
+            preview={importPreview}
+            authStatus={authStatus}
+            authMessage={authMessage}
+            onUrlChange={onImportUrlChange}
+            onImport={onImportNotebookLm}
+            onSave={onSaveNotebookLmImport}
+            onClose={onCloseNotebookImport}
+            onStartLogin={onStartNotebookLmLogin}
+            onFinishLogin={onFinishNotebookLmLogin}
+            onDisconnectLogin={onDisconnectNotebookLmLogin}
+          />
         )}
       </div>
     );
@@ -1333,6 +1699,89 @@ function RevisionScores({ attempts, onBack }) {
   );
 }
 
+function NotebookLmImportModal({
+  url,
+  status,
+  error,
+  preview,
+  authStatus,
+  authMessage,
+  onUrlChange,
+  onImport,
+  onSave,
+  onClose,
+  onStartLogin,
+  onFinishLogin,
+  onDisconnectLogin
+}) {
+  const isLoading = status === "loading";
+  return (
+    <div className="quiz-modal-backdrop">
+      <section className="quiz-import-modal">
+        <button className="talk-close" onClick={onClose} aria-label="Close NotebookLM import">
+          <X size={16} />
+        </button>
+        <div className="quiz-heading">
+          <span>NotebookLM import</span>
+          <h2>Import shared quiz</h2>
+          <p>Shared NotebookLM artifact links only. Avery can use a local signed-in session when the artifact asks for Google login.</p>
+        </div>
+        <div className="quiz-auth-card">
+          <div>
+            <strong>{authStatus?.connected ? "NotebookLM connected" : authStatus?.authInProgress ? "Sign-in window open" : "NotebookLM not connected"}</strong>
+            <span>{authMessage || "Connect locally if this artifact asks for Google sign-in."}</span>
+          </div>
+          <div className="quiz-auth-actions">
+            <button onClick={onStartLogin} disabled={isLoading}>
+              {authStatus?.connected ? "Reconnect" : "Connect NotebookLM"}
+            </button>
+            {authStatus?.authInProgress && (
+              <button onClick={onFinishLogin} disabled={isLoading}>Done signing in</button>
+            )}
+            {authStatus?.connected && (
+              <button onClick={onDisconnectLogin} disabled={isLoading}>Disconnect</button>
+            )}
+          </div>
+        </div>
+        <label className="quiz-import-field">
+          <span>Artifact URL</span>
+          <input
+            type="url"
+            value={url}
+            onChange={(event) => onUrlChange(event.target.value)}
+            placeholder="https://notebooklm.google.com/..."
+            disabled={isLoading}
+          />
+        </label>
+        <div className="quiz-actions">
+          <button onClick={onImport} disabled={isLoading}>
+            {isLoading ? "Importing..." : "Import"}
+          </button>
+          <button onClick={onClose} disabled={isLoading}>Cancel</button>
+        </div>
+        {status === "error" && <div className="quiz-import-status error">{error}</div>}
+        {status === "success" && preview && (
+          <div className="quiz-import-preview">
+            <div className="quiz-import-status success">
+              Found {preview.questions.length} questions in “{preview.name}”.
+            </div>
+            <div className="quiz-import-question-list">
+              {preview.questions.slice(0, 5).map((question, index) => (
+                <div key={question.id || index} className="quiz-import-question">
+                  <strong>{index + 1}. {question.question}</strong>
+                  <span>{question.options.length} options · {question.topic || "Imported"}</span>
+                </div>
+              ))}
+            </div>
+            {preview.questions.length > 5 && <p className="quiz-empty">Previewing first 5 questions.</p>}
+            <button className="quiz-link-button" onClick={onSave}>Save to Avery</button>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function RoomScene({ theme, averyVisualState, onStartingWorkEnded }) {
   return (
     <div className="scene" aria-hidden="true">
@@ -1361,23 +1810,14 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
   const mediaForState = (modeTheme, state) => {
     const media = VIDEO_MEDIA[modeTheme];
     const fallback = media.fallback || VIDEO_MEDIA.day.fallback;
-    if (state === "startingWork") {
-      return { src: media.start, type: "video", mode: "startingWork", loop: false, fallback, poster: fallback };
+    if (state === "workingStart") {
+      return { src: media.workingStart, type: "video", mode: "workingStart", loop: false, fallback, poster: fallback };
     }
-    if (state === "engagedListening") {
-      if (modeTheme === "day") {
-        return { src: media.engaging, type: "video", mode: "engagedListening", loop: true, fallback, poster: fallback };
-      }
-      return {
-        src: media.engagingStill || fallback,
-        type: "image",
-        mode: "engagedListening",
-        loop: false,
-        fallback,
-        poster: fallback
-      };
+    if (state === "engaging") {
+      const engagingFallback = media.engagingFallback || fallback;
+      return { src: media.engaging, type: "video", mode: "engaging", loop: true, fallback: engagingFallback, poster: engagingFallback };
     }
-    return { src: media.loop, type: "video", mode: "passiveWorking", loop: true, fallback, poster: fallback };
+    return { src: media.workingLoop, type: "video", mode: "workingLoop", loop: true, fallback, poster: fallback };
   };
 
   const [currentMedia, setCurrentMedia] = useState(() => mediaForState(theme, visualState));
@@ -1469,7 +1909,7 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
 
   const handleEnded = (media) => {
     if (media.src !== currentRef.current?.src) return;
-    if (media.mode === "startingWork") onStartingWorkEnded?.();
+    if (media.mode === "workingStart") onStartingWorkEnded?.();
   };
 
   const handleError = (media) => {
@@ -1512,32 +1952,35 @@ function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
   };
 
   const renderMedia = (media, className, ref) => {
-    if (!media?.src || failedSources.has(media.src)) return null;
-    if (media.type === "image") {
+    if (!media?.src) return null;
+    const effectiveMedia = failedSources.has(media.src) && media.fallback
+      ? { ...media, src: media.fallback, type: "image", loop: false, poster: media.fallback }
+      : media;
+    if (effectiveMedia.type === "image") {
       return (
         <div
-          key={media.src}
+          key={effectiveMedia.src}
           className={`${className} scene-still`}
-          style={{ "--still-src": `url(${media.src || media.fallback || poster})` }}
+          style={{ "--still-src": `url(${effectiveMedia.src || effectiveMedia.fallback || poster})` }}
         />
       );
     }
     return (
       <video
-        key={media.src}
+        key={effectiveMedia.src}
         ref={ref}
         className={className}
-        src={media.src}
-        poster={media.poster || poster}
+        src={effectiveMedia.src}
+        poster={effectiveMedia.poster || poster}
         muted
         playsInline
         preload="metadata"
-        loop={media.loop}
+        loop={effectiveMedia.loop}
         autoPlay
-        onLoadedData={() => handleLoaded(media)}
-        onCanPlay={() => handleLoaded(media)}
-        onEnded={() => handleEnded(media)}
-        onError={() => handleError(media)}
+        onLoadedData={() => handleLoaded(effectiveMedia)}
+        onCanPlay={() => handleLoaded(effectiveMedia)}
+        onEnded={() => handleEnded(effectiveMedia)}
+        onError={() => handleError(effectiveMedia)}
       />
     );
   };
