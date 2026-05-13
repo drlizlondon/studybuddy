@@ -188,6 +188,100 @@ function isStaticGithubPages() {
   return window.location.hostname.endsWith("github.io");
 }
 
+function optionIndexFromLabel(label) {
+  const normalised = String(label || "").trim().toUpperCase();
+  if (/^[A-D]$/.test(normalised)) return normalised.charCodeAt(0) - 65;
+  return null;
+}
+
+function parseQuestionBankFromText(rawText) {
+  const lines = String(rawText || "")
+    .replace(/\u00a0/g, " ")
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const questions = [];
+  let current = null;
+  let title = "Pasted Avery Quiz";
+
+  const flush = () => {
+    if (!current) return;
+    if (current.question && current.options.length >= 2) {
+      questions.push({
+        id: `pasted_${String(questions.length + 1).padStart(3, "0")}`,
+        topic: current.topic || "Pasted quiz",
+        difficulty: "medium",
+        question: current.question,
+        options: current.options.slice(0, 4),
+        correctAnswerIndex: Number.isInteger(current.correctAnswerIndex) ? current.correctAnswerIndex : null,
+        explanation: current.explanation || "",
+        tags: ["pasted", "imported"]
+      });
+    }
+    current = null;
+  };
+
+  for (const line of lines) {
+    const titleMatch = line.match(/^(?:title|quiz)\s*[:\-]\s*(.+)$/i);
+    const questionMatch =
+      line.match(/^(?:question\s*)?(\d{1,3})[\).:-]\s+(.+)$/i) ||
+      line.match(/^Q(?:uestion)?\s*(\d{1,3})[\).:-]\s+(.+)$/i);
+    const optionMatch = line.match(/^([A-D])[\).:-]\s+(.+)$/i);
+    const answerMatch = line.match(/^(?:answer|correct answer|key)\s*[:\-]\s*([A-D])(?:[\).:-]\s*)?(.*)$/i);
+    const explanationMatch = line.match(/^(?:explanation|rationale|why)\s*[:\-]\s*(.+)$/i);
+    const topicMatch = line.match(/^(?:topic|section)\s*[:\-]\s*(.+)$/i);
+
+    if (titleMatch && !questions.length && !current) {
+      title = titleMatch[1];
+      continue;
+    }
+
+    if (questionMatch) {
+      flush();
+      current = { question: questionMatch[2], options: [], correctAnswerIndex: null, explanation: "", topic: "" };
+      continue;
+    }
+
+    if (!current && line.endsWith("?")) {
+      flush();
+      current = { question: line, options: [], correctAnswerIndex: null, explanation: "", topic: "" };
+      continue;
+    }
+
+    if (!current) continue;
+
+    if (optionMatch) {
+      current.options.push(optionMatch[2]);
+      continue;
+    }
+
+    if (answerMatch) {
+      current.correctAnswerIndex = optionIndexFromLabel(answerMatch[1]);
+      if (answerMatch[2]) current.explanation = [current.explanation, answerMatch[2]].filter(Boolean).join(" ");
+      continue;
+    }
+
+    if (explanationMatch) {
+      current.explanation = [current.explanation, explanationMatch[1]].filter(Boolean).join(" ");
+      continue;
+    }
+
+    if (topicMatch) {
+      current.topic = topicMatch[1];
+    }
+  }
+
+  flush();
+
+  return normaliseQuestionBank({
+    id: `pasted-${Date.now()}`,
+    name: title,
+    description: "Imported from pasted ready-made quiz text.",
+    source: "Pasted quiz text",
+    questions
+  });
+}
+
 function getBankTopics(bank) {
   return [...new Set((bank?.questions || []).map((question) => question.topic).filter(Boolean))];
 }
@@ -421,6 +515,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [notebookImportStatus, setNotebookImportStatus] = useState("idle");
   const [notebookImportError, setNotebookImportError] = useState("");
   const [notebookImportPreview, setNotebookImportPreview] = useState(null);
+  const [pastedQuizText, setPastedQuizText] = useState("");
   const [notebookAuthStatus, setNotebookAuthStatus] = useState({ connected: false, authInProgress: false });
   const [notebookAuthMessage, setNotebookAuthMessage] = useState("");
   const [viewport, setViewport] = useState(() => ({
@@ -769,6 +864,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setNotebookImportOpen(false);
     setNotebookImportStatus("idle");
     setNotebookImportUrl("");
+    setPastedQuizText("");
     setNotebookImportPreview(null);
     setQuizSetupStep("count");
     setQuiz((current) => ({
@@ -777,6 +873,19 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       averyLine: `Saved ${bank.questions.length} questions to Avery.`
     }));
     say(`Saved ${bank.questions.length} questions to Avery.`);
+  };
+
+  const previewPastedQuiz = () => {
+    const bank = parseQuestionBankFromText(pastedQuizText);
+    if (!bank.questions.length) {
+      setNotebookImportStatus("error");
+      setNotebookImportError("I could not find MCQs in that pasted text. Use numbered questions with A/B/C/D options.");
+      setNotebookImportPreview(null);
+      return;
+    }
+    setNotebookImportPreview(bank);
+    setNotebookImportStatus("success");
+    setNotebookImportError("");
   };
 
   const refreshNotebookLmAuthStatus = async () => {
@@ -1459,6 +1568,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
                 importStatus={notebookImportStatus}
                 importError={notebookImportError}
                 importPreview={notebookImportPreview}
+                pastedQuizText={pastedQuizText}
                 authStatus={notebookAuthStatus}
                 authMessage={notebookAuthMessage}
                 onOpenNotebookImport={() => {
@@ -1467,7 +1577,9 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
                 }}
                 onCloseNotebookImport={() => setNotebookImportOpen(false)}
                 onImportUrlChange={setNotebookImportUrl}
+                onPastedQuizTextChange={setPastedQuizText}
                 onImportNotebookLm={importNotebookLmQuiz}
+                onPreviewPastedQuiz={previewPastedQuiz}
                 onSaveNotebookLmImport={saveNotebookLmImport}
                 onStartNotebookLmLogin={startNotebookLmLogin}
                 onFinishNotebookLmLogin={finishNotebookLmLogin}
@@ -1520,12 +1632,15 @@ function QuizPanel({
   importStatus,
   importError,
   importPreview,
+  pastedQuizText,
   authStatus,
   authMessage,
   onOpenNotebookImport,
   onCloseNotebookImport,
   onImportUrlChange,
+  onPastedQuizTextChange,
   onImportNotebookLm,
+  onPreviewPastedQuiz,
   onSaveNotebookLmImport,
   onStartNotebookLmLogin,
   onFinishNotebookLmLogin,
@@ -1600,10 +1715,13 @@ function QuizPanel({
             status={importStatus}
             error={importError}
             preview={importPreview}
+            pastedQuizText={pastedQuizText}
             authStatus={authStatus}
             authMessage={authMessage}
             onUrlChange={onImportUrlChange}
+            onPastedQuizTextChange={onPastedQuizTextChange}
             onImport={onImportNotebookLm}
+            onPreviewPastedQuiz={onPreviewPastedQuiz}
             onSave={onSaveNotebookLmImport}
             onClose={onCloseNotebookImport}
             onStartLogin={onStartNotebookLmLogin}
@@ -1739,10 +1857,13 @@ function NotebookLmImportModal({
   status,
   error,
   preview,
+  pastedQuizText,
   authStatus,
   authMessage,
   onUrlChange,
+  onPastedQuizTextChange,
   onImport,
+  onPreviewPastedQuiz,
   onSave,
   onClose,
   onStartLogin,
@@ -1796,6 +1917,24 @@ function NotebookLmImportModal({
             {isLoading ? "Importing..." : "Import"}
           </button>
           <button onClick={onClose} disabled={isLoading}>Cancel</button>
+        </div>
+        <div className="quiz-paste-card">
+          <div className="quiz-heading">
+            <span>Ready-made quiz</span>
+            <h2>Paste quiz text</h2>
+            <p>Use numbered questions with A/B/C/D options. Answer and explanation lines are optional.</p>
+          </div>
+          <textarea
+            value={pastedQuizText}
+            onChange={(event) => onPastedQuizTextChange(event.target.value)}
+            aria-label="Paste ready-made quiz text"
+            rows={8}
+            placeholder={"Title: Adult revision quiz\n1. What is the first step?\nA. Option one\nB. Option two\nC. Option three\nD. Option four\nAnswer: B\nExplanation: Short reason."}
+            disabled={isLoading}
+          />
+          <button className="quiz-link-button" onClick={onPreviewPastedQuiz} disabled={isLoading}>
+            Preview pasted quiz
+          </button>
         </div>
         {status === "error" && <div className="quiz-import-status error">{error}</div>}
         {status === "success" && preview && (

@@ -4957,6 +4957,44 @@ body {
   font-weight: 900;
 }
 
+.quiz-paste-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid rgba(58, 42, 31, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.evening .quiz-paste-card {
+  border-color: rgba(255, 246, 230, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.quiz-paste-card .quiz-heading {
+  padding-right: 0;
+}
+
+.quiz-paste-card textarea {
+  width: 100%;
+  min-height: 150px;
+  resize: vertical;
+  border: 1px solid rgba(58, 42, 31, 0.16);
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: rgba(255, 255, 255, 0.54);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.evening .quiz-paste-card textarea {
+  border-color: rgba(255, 246, 230, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .quiz-auth-card {
   display: grid;
   gap: 10px;
