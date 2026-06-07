@@ -605,8 +605,8 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     let cancelled = false;
     Promise.all(
       Object.values(TRACKS).filter((track) => track.src).map((track) =>
-        fetch(track.src, { cache: "no-store" })
-          .then((response) => response.ok && (response.headers.get("content-type") || "").startsWith("audio/"))
+        fetch(track.src, { method: "HEAD" })
+          .then((response) => response.ok || response.status === 405)
           .catch(() => false)
       )
     ).then((results) => {
@@ -1469,6 +1469,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             <p>{message}</p>
             {musicPrompt && (
               <div className="music-options">
+                {Object.entries(TRACKS).map(([key, track]) => (
+                  <button key={key} onClick={() => resolveSequenceOption({ id: key, outcome: "playMusic", trackKey: key })}>
+                    {track.name}
+                  </button>
+                ))}
+                <button onClick={() => resolveSequenceOption({ id: "none", outcome: "returnToWork" })}>
+                  No music
+                </button>
                 {audioChecked && !audioAvailable && <span className="audio-note">Add audio files to /public/audio to enable music.</span>}
               </div>
             )}

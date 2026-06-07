@@ -56,13 +56,8 @@ export const AVERY_SEQUENCES = {
     trigger: "Change the music",
     averyLine: "Should I play some music while we study?",
     visualState: "engaging",
-    requiresUserAnswer: true,
-    options: [
-      { id: "lofi", label: "Lofi", outcome: "playMusic", trackKey: "lofi" },
-      { id: "piano", label: "Revision piano", outcome: "playMusic", trackKey: "piano" },
-      { id: "nature", label: "Nature sounds", outcome: "playMusic", trackKey: "nature" },
-      { id: "none", label: "No music", outcome: "returnToWork" }
-    ],
+    requiresUserAnswer: false,
+    options: [],
     afterChoice: {
       lofi: "Okay, I'll put that on softly.",
       piano: "Good choice. Something gentle in the background.",
