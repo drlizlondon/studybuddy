@@ -11,7 +11,7 @@ export const PIP_MOTIVATION_LINES = [
   "You can be scared and still keep going gently.",
   "You have put work in already. That counts.",
   "We are going to finish cleanly, not dramatically.",
-  "Your exam does not need panic from you. It needs small, repeated contact.",
+  "Your deadline does not need panic from you. It needs small, repeated contact.",
   "Let's prove to your brain that starting again is possible.",
   "One page, one question, one note. That is enough to restart.",
   "I am here. I am working too. Let's not abandon ourselves.",
@@ -54,7 +54,7 @@ export const PIP_SEQUENCES = {
   musicPrompt: {
     id: "musicPrompt",
     trigger: "Change the music",
-    pipLine: "Should I play some music while we study?",
+    pipLine: "Should I play some music while we work?",
     visualState: "engaging",
     waitsForAnswer: false,
     options: [],

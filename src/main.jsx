@@ -39,7 +39,7 @@ const SCRIPTED_EVENTS = [
 // such as Pixabay Music, Free Music Archive, or Uppbeat, with licence checks before public release.
 const TRACKS = {
   lofi: { name: "Lofi", src: assetUrl("/audio/lofi-study.mp3") },
-  piano: { name: "Revision piano", src: assetUrl("/audio/revision-piano.mp3") },
+  piano: { name: "Piano", src: assetUrl("/audio/piano.mp3") },
   nature: { name: "Nature sounds", src: assetUrl("/audio/nature-sounds.mp3") }
 };
 
@@ -117,8 +117,8 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
           <h1>Study<br />Double</h1>
           <Sparkles size={18} />
         </div>
-        <h2>How long are we studying today?</h2>
-        <div className="duration-grid" role="group" aria-label="Study duration">
+        <h2>How long are we working today?</h2>
+        <div className="duration-grid" role="group" aria-label="Work duration">
           {[45, 90, 180].map((mins) => (
             <button
               key={mins}
@@ -152,7 +152,7 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
           <textarea
             value={task}
             onChange={(event) => setTask(event.target.value)}
-            placeholder="Finish revising Chapter 6 and complete end of chapter questions."
+            placeholder="Read the report and write three notes on it."
             rows={3}
           />
         </label>
@@ -168,7 +168,7 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
           onClick={() =>
             onStart({
               durationMinutes: selectedDuration,
-              userTask: task.trim() || "Stay focused on today's study goal.",
+              userTask: task.trim(),
               breakPrompts: breaks
             })
           }
@@ -855,12 +855,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       </section>
 
       <section className={`session-card floating-card ${isTimerMinimized ? "is-minimized" : ""}`}>
-        <div className="task-block">
-          <span>Your task</span>
-          <p>{session.userTask}</p>
-        </div>
+        {session.userTask && (
+          <div className="task-block">
+            <span>Your task</span>
+            <p>{session.userTask}</p>
+          </div>
+        )}
         <div className="timer-block">
-          <span>Study session</span>
+          <span>Work session</span>
           <strong>{formatTime(remaining)}</strong>
           <small>{sprintActive ? "10-minute push · stay with Pip." : "Stay focused, we've got this."}</small>
         </div>
@@ -1035,7 +1037,7 @@ function SummaryModal({ summary, onRestart }) {
       <section className="summary-card">
         <TimerReset size={30} />
         <h2>Session complete</h2>
-        <p>You studied for {summary.studied} minutes.</p>
+        <p>You worked for {summary.studied} minutes.</p>
         <p>Pip finished {summary.pip}% of his task.</p>
         <strong>Today's total: {summary.total} minutes.</strong>
         <button onClick={onRestart}>Start another session</button>

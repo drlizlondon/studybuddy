@@ -1,7 +1,7 @@
 export const PIP_THREADS = [
   {
-    id: "dont-want-to-revise",
-    trigger: "I don't want to revise anymore",
+    id: "dont-want-to-work",
+    trigger: "I don't want to work on this anymore",
     mood: "resistant",
     rarity: "common",
     openingLine: "I hear you. Are you done, or are you avoiding it?",
@@ -14,7 +14,7 @@ export const PIP_THREADS = [
         ]
       },
       avoidance: {
-        line: "Thank you for being honest. If stopping is avoidance, we do one more small block. I am doing one awkward interview question too.",
+        line: "Thank you for being honest. If stopping is avoidance, we do one more small block. I am doing one awkward email too.",
         userOptions: [{ label: "Start 10-minute push", nextNode: "final", outcome: "startMiniSprint" }]
       },
       done: {
@@ -48,7 +48,7 @@ export const PIP_THREADS = [
         ]
       },
       little: {
-        line: "Good. We are not trying to rescue the whole day. I will do the next section of my application with you.",
+        line: "Good. We are not trying to rescue the whole day. I will do the next section of my report with you.",
         userOptions: [{ label: "Start 10-minute push", nextNode: "final", outcome: "startMiniSprint" }]
       },
       break: {
@@ -66,10 +66,10 @@ export const PIP_THREADS = [
   },
   {
     id: "scared-wont-pass",
-    trigger: "I'm scared I won't pass",
+    trigger: "I'm scared I won't get it done",
     mood: "anxious",
     rarity: "common",
-    openingLine: "You can be scared and still keep going gently. That fear is loud, but it is not a study plan.",
+    openingLine: "You can be scared and still keep going gently. That fear is loud, but it is not a plan.",
     nodes: {
       start: {
         userOptions: [
@@ -79,7 +79,7 @@ export const PIP_THREADS = [
         ]
       },
       weak: {
-        line: "Yes. Your exam does not need panic from you. It needs small, repeated contact. My exam notes are messy too.",
+        line: "Yes. Your deadline does not need panic from you. It needs small, repeated contact. My notes are messy too.",
         userOptions: [{ label: "Start 10-minute push", nextNode: "final", outcome: "startMiniSprint" }]
       },
       break: {
@@ -94,7 +94,7 @@ export const PIP_THREADS = [
         ]
       }
     },
-    finalLine: "Passing is built in small, boring blocks. This can be one of them.",
+    finalLine: "Getting it done is built in small, boring blocks. This can be one of them.",
     returnToWorkLine: "I'm opening my weakest page too.",
     outcome: "returnToWork"
   },
@@ -113,7 +113,7 @@ export const PIP_THREADS = [
         ]
       },
       startHard: {
-        line: "Open it, name the first ugly step, and do only that. I am doing the hardest portfolio paragraph with you.",
+        line: "Open it, name the first ugly step, and do only that. I am doing the hardest paragraph with you.",
         userOptions: [{ label: "Start 10-minute push", nextNode: "final", outcome: "startMiniSprint" }]
       },
       five: {
@@ -162,7 +162,7 @@ export const PIP_THREADS = [
         ]
       }
     },
-    finalLine: "A clean ending is part of studying well.",
+    finalLine: "A clean ending is part of working well.",
     returnToWorkLine: "I'll keep going with my deadline for a little while.",
     outcome: "returnToWork"
   },
@@ -307,7 +307,7 @@ export const PIP_THREADS = [
         ]
       },
       shrink: {
-        line: "Write the next physical action, not the whole outcome. My application is only one paragraph right now.",
+        line: "Write the next physical action, not the whole outcome. My report is only one paragraph right now.",
         userOptions: [{ label: "Back to work", nextNode: "final", outcome: "returnToWork" }]
       },
       pause: {
@@ -333,7 +333,7 @@ export const PIP_THREADS = [
         ]
       },
       open: {
-        line: "Just open it. No promise to finish. I will open my interview notes at the same time.",
+        line: "Just open it. No promise to finish. I will open my notes at the same time.",
         userOptions: [{ label: "Start 10 minutes", nextNode: "final", outcome: "startMiniSprint" }]
       },
       support: {
@@ -367,7 +367,7 @@ export const PIP_THREADS = [
         userOptions: [{ label: "Start 10 minutes", nextNode: "final", outcome: "startMiniSprint" }]
       }
     },
-    finalLine: "You are allowed to be a person while you study.",
+    finalLine: "You are allowed to be a person while you work.",
     returnToWorkLine: "I'm coming back gently too.",
     outcome: "returnToWork"
   }
