@@ -4076,22 +4076,31 @@ body {
 .room-backdrop {
   position: absolute;
   inset: 0;
-  background:
-    radial-gradient(circle at 66% 24%, rgba(255, 244, 214, 0.5), transparent 36%),
-    linear-gradient(180deg, #cfe3ee 0%, #e9efe0 48%, #cdb48a 100%);
 }
 
-.room-backdrop--evening {
+/* Light tint that follows day or night; at night a warm glow around Pip's lamp. */
+.room-tint {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.room-tint--day {
+  background: rgba(255, 236, 200, 0.06);
+}
+
+.room-tint--evening {
   background:
-    radial-gradient(circle at 30% 54%, rgba(255, 170, 80, 0.22), transparent 34%),
-    linear-gradient(180deg, #0b1620 0%, #1a1a24 52%, #2c2018 100%);
+    radial-gradient(circle at calc(var(--pip-x, 50%) - 14%) calc(var(--pip-y, 50%) - 6%), rgba(255, 170, 80, 0.3), rgba(255, 170, 80, 0) 36%),
+    rgba(12, 8, 24, 0.22);
 }
 
 .pip-stage {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: min(94vw, 760px);
+  width: calc(min(94vw, 760px) * var(--pip-scale, 1));
   transform: translate(-50%, -50%);
   z-index: 3;
 }
@@ -4178,4 +4187,47 @@ body {
   margin: 14px 0 0;
   font-weight: 700;
   line-height: 1.4;
+}
+
+/* Choose your view (SD-1g). */
+.view-picker {
+  margin: 8px 0 2px;
+}
+
+.view-picker-title {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 700;
+}
+
+.view-picker-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.view-choice {
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.55);
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+
+.view-choice i {
+  display: block;
+  height: 30px;
+  border-radius: 6px;
+}
+
+.view-choice.active {
+  border-color: #c9a05a;
+  background: rgba(201, 160, 90, 0.2);
 }

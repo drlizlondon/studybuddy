@@ -18,7 +18,6 @@
   --ds-steam: rgba(255, 255, 255, 0.7);
   --ds-pen: #2d2a35;
   --ds-arm: #7c5cfc;
-  --ds-tint: rgba(255, 224, 170, 0.06);
   --ds-glow: 0;
   --ds-contact: rgba(40, 24, 10, 0.28);
   display: block;
@@ -41,7 +40,6 @@
   --ds-mug: #d8cdb8;
   --ds-mug-rim: #b3a68e;
   --ds-steam: rgba(255, 238, 210, 0.6);
-  --ds-tint: rgba(255, 150, 60, 0.13);
   --ds-glow: 0.9;
   --ds-contact: rgba(0, 0, 0, 0.42);
 }
@@ -50,7 +48,6 @@
 .pip-scene--evening .ds-ground-shadow { opacity: 1; }
 .pip-scene .ds-lamp-glow { opacity: var(--ds-glow); }
 .pip-scene .ds-contact { fill: var(--ds-contact); }
-.pip-scene .ds-tint { fill: var(--ds-tint); pointer-events: none; }
 
 .pip-scene .ds-desk-top { fill: var(--ds-desk-top); }
 .pip-scene .ds-desk-front { fill: var(--ds-desk-front); }

@@ -108,9 +108,6 @@ export function DeskScene({ state = "reading", theme = "day" }) {
         <path className="ds-mug-handle" d="M322 180 Q336 182 322 194" fill="none" />
         <rect className="ds-mug-rim" x="290" y="174" width="32" height="5" rx="2.5" />
       </g>
-
-      {/* Light tint that follows day or evening. */}
-      <rect className="ds-tint" x="0" y="70" width="400" height="210" />
     </svg>
   );
 }

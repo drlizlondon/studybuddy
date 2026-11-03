@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import { PIP_MOTIVATION_LINES, PIP_SEQUENCES, getPipSequence } from "./data/pipSequences";
 import { CLOSING_ANSWERS, CLOSING_QUESTION, CLOSING_QUESTION_BLANK_TASK, SESSIONS_KEEP, SESSIONS_STORAGE_KEY } from "./data/pipClosing.js";
+import { DEFAULT_ROOM_ID, ROOMS, ROOM_STORAGE_KEY, getRoom } from "./data/rooms.js";
 import { PIP_TASKS } from "./data/pipTasks.js";
 import { PIP_THREADS, getThreadsByTrigger } from "./data/pipThreads";
 import { DeskScene, PipFace } from "./pip/DeskScene.jsx";
@@ -85,7 +86,48 @@ function formatTime(seconds) {
   return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
 }
 
-function OpeningScreen({ onStart, theme, onToggleTheme }) {
+function getSavedRoomId() {
+  try {
+    const saved = window.localStorage.getItem(ROOM_STORAGE_KEY);
+    return ROOMS.some((room) => room.id === saved) ? saved : DEFAULT_ROOM_ID;
+  } catch {
+    return DEFAULT_ROOM_ID;
+  }
+}
+
+function saveRoomId(id) {
+  try {
+    window.localStorage.setItem(ROOM_STORAGE_KEY, id);
+  } catch {
+    // Storage can be unavailable; the choice still applies for this visit.
+  }
+}
+
+// The view behind Pip. Uses the room's image once it is known to exist, and its CSS-gradient
+// placeholder otherwise (no image request at all while room.images is false).
+function RoomBackdrop({ room, theme }) {
+  const variant = theme === "evening" ? "night" : "day";
+  const wanted = room.images ? assetUrl(room[variant]) : null;
+  const [loaded, setLoaded] = useState(null);
+
+  useEffect(() => {
+    setLoaded(null);
+    if (!wanted) return undefined;
+    let cancelled = false;
+    const probe = new Image();
+    probe.onload = () => !cancelled && setLoaded(wanted);
+    probe.onerror = () => !cancelled && setLoaded(null);
+    probe.src = wanted;
+    return () => {
+      cancelled = true;
+    };
+  }, [wanted]);
+
+  const layers = [loaded ? `url("${loaded}") center / cover no-repeat` : null, room.placeholder[variant]].filter(Boolean);
+  return <div className="room-backdrop" data-room={room.id} data-variant={variant} style={{ background: layers.join(", ") }} aria-hidden="true" />;
+}
+
+function OpeningScreen({ onStart, theme, onToggleTheme, roomId, onRoomChange }) {
   const [duration, setDuration] = useState(45);
   const [custom, setCustom] = useState("");
   const [task, setTask] = useState("");
@@ -97,7 +139,7 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
     <main className={`opening-screen ${theme}`}>
       <section className="opening-room" aria-hidden="true">
         <div className="opening-bg-stack">
-          <div className={`room-backdrop room-backdrop--${theme}`} />
+          <RoomBackdrop room={getRoom(roomId)} theme={theme} />
           <div className="opening-light" />
           <div className="opening-haze" />
           <div className="opening-grain" />
@@ -157,6 +199,24 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
             rows={3}
           />
         </label>
+        <div className="view-picker" role="group" aria-label="Choose your view">
+          <span className="view-picker-title">Choose your view</span>
+          <div className="view-picker-options">
+            {ROOMS.map((room) => (
+              <button
+                key={room.id}
+                type="button"
+                className={roomId === room.id ? "view-choice active" : "view-choice"}
+                aria-pressed={roomId === room.id}
+                data-room={room.id}
+                onClick={() => onRoomChange(room.id)}
+              >
+                <i style={{ background: room.placeholder.day }} aria-hidden="true" />
+                <span>{room.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="break-toggle">
           <span>Should Pip suggest breaks?</span>
           <div>
@@ -184,19 +244,26 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
 function App() {
   const [session, setSession] = useState(null);
   const [theme, setTheme] = useState("day");
+  const [roomId, setRoomId] = useState(getSavedRoomId);
+  const chooseRoom = (id) => {
+    setRoomId(id);
+    saveRoomId(id);
+  };
 
   return session ? (
-    <StudyRoom session={session} initialTheme={theme} onThemeChange={setTheme} onRestart={() => setSession(null)} />
+    <StudyRoom session={session} room={getRoom(roomId)} initialTheme={theme} onThemeChange={setTheme} onRestart={() => setSession(null)} />
   ) : (
     <OpeningScreen
       theme={theme}
       onToggleTheme={() => setTheme((value) => (value === "day" ? "evening" : "day"))}
+      roomId={roomId}
+      onRoomChange={chooseRoom}
       onStart={setSession}
     />
   );
 }
 
-function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) {
+function StudyRoom({ session, room, initialTheme = "day", onThemeChange, onRestart }) {
   const roomRef = useRef(null);
   const [theme, setTheme] = useState(initialTheme);
   const [totalSeconds, setTotalSeconds] = useState(session.durationMinutes * 60);
@@ -794,7 +861,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         onPause={handleAudioPause}
         onPlay={handleAudioPlay}
       />
-      <RoomScene theme={theme} pipState={pipState} />
+      <RoomScene room={room} theme={theme} pipState={pipState} />
 
       <section className="display-settings">
         <button
@@ -1013,11 +1080,13 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   );
 }
 
-function RoomScene({ theme, pipState }) {
+function RoomScene({ room, theme, pipState }) {
+  const { x, y, scale } = room.pip;
   return (
     <div className="scene">
-      <div className={`room-backdrop room-backdrop--${theme}`} aria-hidden="true" />
-      <div className="pip-stage">
+      <RoomBackdrop room={room} theme={theme} />
+      <div className={`room-tint room-tint--${theme}`} style={{ "--pip-x": `${x}%`, "--pip-y": `${y}%` }} aria-hidden="true" />
+      <div className="pip-stage" style={{ left: `${x}%`, top: `${y}%`, "--pip-scale": scale }}>
         <DeskScene state={pipState} theme={theme} />
       </div>
       <div className="directional-light" aria-hidden="true" />
