@@ -207,7 +207,8 @@ test("E2 each button shows its line and appends one record with the right answer
     expect(last.task).toBe(TASK);
     expect(typeof last.minutes).toBe("number");
     expect(Number.isNaN(Date.parse(last.date))).toBe(false);
-    expect(Object.keys(last).sort()).toEqual(["answer", "date", "minutes", "task"]);
+    expect(Object.keys(last).sort()).toEqual(["answer", "date", "minutes", "rating", "task"]);
+    expect(last.rating).toBeNull(); // untouched slider = no rating, never a default 5
     // answering twice does not add a second record
     await expect(page.locator(".closing-answers button").first()).toBeDisabled();
   }
@@ -354,7 +355,9 @@ test("G2 no hard-coded scores, percentages or ratings in code", async ({}, testI
     readFileSync(file, "utf8").split("\n").forEach((line, i) => {
       const code = line.replace(/\/\/.*$/, "");
       if (/\d+(\.\d+)?\s*%/.test(code) && !/gradient|<stop/i.test(code)) hits.push(`${file}:${i + 1}: ${line.trim()}`);
-      if (/\b(score|rating)\b/i.test(code)) hits.push(`${file}:${i + 1}: ${line.trim()}`);
+      // Since the self-rating (3 Nov) "rating" is a user input, so the word alone is fine; a rating or score
+      // set to a number literal is not (that would be a made-up rating).
+      if (/\b(score|rating)\b\s*[:=(]\s*\d/i.test(code) || /\b(setScore|setRating)\(\s*\d/.test(code)) hits.push(`${file}:${i + 1}: ${line.trim()}`);
     });
   }
   expect(hits).toEqual([]);
@@ -453,3 +456,55 @@ function walk(dir) {
     return statSync(full).isDirectory() ? walk(full) : [full];
   });
 }
+
+// Self-rating out of 10 (founder 3 Nov). Untouched saves nothing as a rating; a drag saves the number.
+test("R1 the rating shows its question and anchors, unset until moved", async ({ page }) => {
+  await enterRoom(page);
+  await endSessionViaStop(page);
+  await expect(page.getByText("What do you give yourself out of 10 for your session today?")).toBeVisible();
+  await expect(page.locator(".rating-value")).toHaveText("Drag to rate");
+  for (const t of ["Hard one, but I showed up", "Did OK", "Absolutely smashed it"]) await expect(page.locator(".rating-anchors")).toContainText(t);
+  expect(await readSessions(page)).toHaveLength(0);
+});
+
+test("R2 moving the slider saves that rating; 10 shows its anchor", async ({ page }) => {
+  await enterRoom(page);
+  await endSessionViaStop(page);
+  await page.locator("#session-rating-input").fill("8");
+  await expect(page.locator(".rating-value")).toHaveText("8/10");
+  let records = await readSessions(page);
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({ rating: 8, answer: null, task: TASK });
+  await page.locator("#session-rating-input").fill("10");
+  await expect(page.locator(".rating-value")).toHaveText("10/10 · Absolutely smashed it");
+  records = await readSessions(page);
+  expect(records).toHaveLength(1);
+  expect(records[0].rating).toBe(10);
+});
+
+test("R3 rating and answer land in one record, in either order", async ({ page }) => {
+  await enterRoom(page);
+  await endSessionViaStop(page);
+  await page.locator("#session-rating-input").fill("7");
+  await page.getByRole("button", { name: "Yes", exact: true }).click();
+  const records = await readSessions(page);
+  expect(records).toHaveLength(1);
+  expect(records[0]).toMatchObject({ rating: 7, answer: "yes" });
+});
+
+test("R4 tapping the slider where it rests (5) still counts as a rating of 5", async ({ page }) => {
+  await enterRoom(page);
+  await endSessionViaStop(page);
+  await page.locator("#session-rating-input").dispatchEvent("pointerup");
+  await expect(page.locator(".rating-value")).toHaveText("5/10 · Did OK");
+  expect((await readSessions(page))[0].rating).toBe(5);
+});
+
+test("G2-mutant: a hard-coded rating is caught", async ({}, testInfo) => {
+  desktopOnly(testInfo);
+  const rule = (code) => /\b(score|rating)\b\s*[:=(]\s*\d/i.test(code) || /\b(setScore|setRating)\(\s*\d/.test(code);
+  expect(rule("upsertSessionRecord(d, { rating: 7 })")).toBe(true);
+  expect(rule("setRating(9)")).toBe(true);
+  expect(rule("setRating(Number(event.target.value))")).toBe(false);
+});
+

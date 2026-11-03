@@ -92,4 +92,17 @@ Identifier-only renames are not wording and are not listed: `averyLine` to `pipL
 | new | Country views |
 | new | Future office |
 
+## 7. Self-rating at the end (founder, 3 Nov), marked new
+
+The 1 label is a coordinator draft: the founder gave 5 and 10. "Not rated" is what a screen reader hears before the slider is moved.
+
+| Before | After |
+|---|---|
+| new | What do you give yourself out of 10 for your session today? |
+| new | Drag to rate |
+| new | Not rated |
+| new | Hard one, but I showed up |
+| new | Did OK |
+| new | Absolutely smashed it |
+
 Removed with the quiz (SD-1a, not rewritten): the "Test me" and "Revision score" buttons and every quiz and NotebookLM line.

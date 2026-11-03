@@ -21,7 +21,7 @@ import {
   X
 } from "lucide-react";
 import { PIP_MOTIVATION_LINES, PIP_SEQUENCES, getPipSequence } from "./data/pipSequences";
-import { CLOSING_ANSWERS, CLOSING_QUESTION, CLOSING_QUESTION_BLANK_TASK, SESSIONS_KEEP, SESSIONS_STORAGE_KEY } from "./data/pipClosing.js";
+import { CLOSING_ANSWERS, CLOSING_QUESTION, CLOSING_QUESTION_BLANK_TASK, RATING_ANCHORS, RATING_QUESTION, RATING_UNSET, SESSIONS_KEEP, SESSIONS_STORAGE_KEY } from "./data/pipClosing.js";
 import { DEFAULT_ROOM_ID, ROOMS, ROOM_STORAGE_KEY, getRoom } from "./data/rooms.js";
 import { PIP_TASKS } from "./data/pipTasks.js";
 import { PIP_THREADS, getThreadsByTrigger } from "./data/pipThreads";
@@ -1102,11 +1102,14 @@ function RoomScene({ room, theme, pipState }) {
 }
 
 // Saved on this device only: {date, minutes, task, answer}. Nothing leaves the device.
-function saveSessionRecord(record) {
+// One record per finished session, created by the first answer or rating and updated by the other.
+function upsertSessionRecord(date, patch) {
   try {
     const previous = JSON.parse(window.localStorage.getItem(SESSIONS_STORAGE_KEY) || "[]");
     const list = Array.isArray(previous) ? previous : [];
-    window.localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify([...list, record].slice(-SESSIONS_KEEP)));
+    const index = list.findIndex((record) => record.date === date);
+    const next = index === -1 ? [...list, { date, ...patch }] : list.map((record, i) => (i === index ? { ...record, ...patch } : record));
+    window.localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify(next.slice(-SESSIONS_KEEP)));
   } catch {
     // Storage can be unavailable (private window); the question still works.
   }
@@ -1114,13 +1117,23 @@ function saveSessionRecord(record) {
 
 function SummaryModal({ summary, task, onRestart }) {
   const [answerId, setAnswerId] = useState(null);
+  const [rating, setRating] = useState(null);
+  const [recordDate] = useState(() => new Date().toISOString());
   const answered = CLOSING_ANSWERS.find((item) => item.id === answerId);
+  const base = { minutes: summary.studied, task };
 
   const answer = (item) => {
     if (answerId) return;
     setAnswerId(item.id);
-    saveSessionRecord({ date: new Date().toISOString(), minutes: summary.studied, task, answer: item.id });
+    upsertSessionRecord(recordDate, { ...base, answer: item.id, rating });
   };
+
+  const rate = (value) => {
+    setRating(value);
+    upsertSessionRecord(recordDate, { ...base, answer: answerId, rating: value });
+  };
+
+  const nearest = rating == null ? null : RATING_ANCHORS.reduce((a, b) => (Math.abs(b.value - rating) < Math.abs(a.value - rating) ? b : a));
 
   return (
     <div className="summary-backdrop">
@@ -1146,6 +1159,25 @@ function SummaryModal({ summary, task, onRestart }) {
             ))}
           </div>
           {answered && <p className="closing-reply" role="status">{answered.pipLine}</p>}
+        </div>
+        <div className={rating == null ? "session-rating unset" : "session-rating"}>
+          <label htmlFor="session-rating-input">{RATING_QUESTION}</label>
+          <p className="rating-value" aria-live="polite">{rating == null ? RATING_UNSET : `${rating}/10${nearest && nearest.value === rating ? ` · ${nearest.label}` : ""}`}</p>
+          <input
+            id="session-rating-input"
+            type="range"
+            min="1"
+            max="10"
+            step="1"
+            value={rating ?? 5}
+            aria-valuetext={rating == null ? "Not rated" : `${rating} out of 10`}
+            onChange={(event) => rate(Number(event.target.value))}
+            onPointerUp={(event) => rate(Number(event.currentTarget.value))}
+            onKeyUp={(event) => rate(Number(event.currentTarget.value))}
+          />
+          <div className="rating-anchors" aria-hidden="true">
+            {RATING_ANCHORS.map((a) => <span key={a.value}><b>{a.value}</b> {a.label}</span>)}
+          </div>
         </div>
         <button onClick={onRestart}>Start another session</button>
       </section>
