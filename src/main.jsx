@@ -1127,9 +1127,9 @@ function SummaryModal({ summary, task, onRestart }) {
       <section className="summary-card">
         <TimerReset size={30} />
         <h2>Session complete</h2>
-        <p>You worked for {summary.studied} minutes.</p>
+        <p>You worked for {summary.studied} {summary.studied === 1 ? "minute" : "minutes"}.</p>
         <p>Pip finished {summary.pip}% of his task.</p>
-        <strong>Today's total: {summary.total} minutes.</strong>
+        <strong>Today's total: {summary.total} {summary.total === 1 ? "minute" : "minutes"}.</strong>
         <div className="closing-question" role="group" aria-labelledby="closing-question-text">
           {task && <p className="closing-task">“{task}”</p>}
           <h3 id="closing-question-text">{task ? CLOSING_QUESTION : CLOSING_QUESTION_BLANK_TASK}</h3>
