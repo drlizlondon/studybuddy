@@ -4120,3 +4120,62 @@ body {
     transition: none !important;
   }
 }
+
+/* Closing question (SD-1e). */
+.summary-card {
+  max-height: calc(100svh - 40px);
+  overflow-y: auto;
+}
+
+.closing-question {
+  margin: 4px 0 20px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(58, 42, 31, 0.16);
+}
+
+.closing-question h3 {
+  margin: 6px 0 14px;
+  font-family: Georgia, serif;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.closing-task {
+  margin: 0 0 4px;
+  font-style: italic;
+  overflow-wrap: anywhere;
+}
+
+.closing-answers {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.closing-answers button {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid rgba(58, 42, 31, 0.24);
+  border-radius: 8px;
+  background: #fffdf8;
+  color: #24170d;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.closing-answers button.active {
+  background: #c9a05a;
+  border-color: #c9a05a;
+}
+
+.closing-answers button:disabled:not(.active) {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.closing-reply {
+  margin: 14px 0 0;
+  font-weight: 700;
+  line-height: 1.4;
+}

@@ -101,6 +101,21 @@ if (process.argv.includes("--emit")) {
   for (const c of changed.filter((x) => x.file !== "src/main.jsx")) console.log(`| ${cell(c.before)} | ${cell(c.after)} |`);
   process.exit(0);
 }
+// New data files: every sentence in them must be in the table too.
+for (const file of ["src/data/pipClosing.js", "src/data/pipTasks.js", "src/data/rooms.js"]) {
+  let source;
+  try {
+    source = readFileSync(join(root, file), "utf8");
+  } catch {
+    continue;
+  }
+  const withoutComments = source.replace(/\/\/.*$/gm, "");
+  for (const text of strings(withoutComments)) {
+    changed.push({ file, key: "new", before: "", after: text });
+    if (!afters.has(text)) failures.push(`not in table: ${file}\n    after: ${text}`);
+  }
+}
+
 console.log(`${changed.length} changed or new lines found; table has ${pairs.size} rows.`);
 if (failures.length) {
   console.log(`FAIL: ${failures.length} line(s) changed but not in docs/SD-1-WORDING-DIFF.md`);

@@ -21,6 +21,7 @@ import {
   X
 } from "lucide-react";
 import { PIP_MOTIVATION_LINES, PIP_SEQUENCES, getPipSequence } from "./data/pipSequences";
+import { CLOSING_ANSWERS, CLOSING_QUESTION, CLOSING_QUESTION_BLANK_TASK, SESSIONS_KEEP, SESSIONS_STORAGE_KEY } from "./data/pipClosing.js";
 import { PIP_TASKS } from "./data/pipTasks.js";
 import { PIP_THREADS, getThreadsByTrigger } from "./data/pipThreads";
 import { DeskScene, PipFace } from "./pip/DeskScene.jsx";
@@ -1007,7 +1008,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         </div>
       )}
 
-      {summary && <SummaryModal summary={summary} onRestart={onRestart} />}
+      {summary && <SummaryModal summary={summary} task={session.userTask} onRestart={onRestart} />}
     </main>
   );
 }
@@ -1031,7 +1032,27 @@ function RoomScene({ theme, pipState }) {
   );
 }
 
-function SummaryModal({ summary, onRestart }) {
+// Saved on this device only: {date, minutes, task, answer}. Nothing leaves the device.
+function saveSessionRecord(record) {
+  try {
+    const previous = JSON.parse(window.localStorage.getItem(SESSIONS_STORAGE_KEY) || "[]");
+    const list = Array.isArray(previous) ? previous : [];
+    window.localStorage.setItem(SESSIONS_STORAGE_KEY, JSON.stringify([...list, record].slice(-SESSIONS_KEEP)));
+  } catch {
+    // Storage can be unavailable (private window); the question still works.
+  }
+}
+
+function SummaryModal({ summary, task, onRestart }) {
+  const [answerId, setAnswerId] = useState(null);
+  const answered = CLOSING_ANSWERS.find((item) => item.id === answerId);
+
+  const answer = (item) => {
+    if (answerId) return;
+    setAnswerId(item.id);
+    saveSessionRecord({ date: new Date().toISOString(), minutes: summary.studied, task, answer: item.id });
+  };
+
   return (
     <div className="summary-backdrop">
       <section className="summary-card">
@@ -1040,6 +1061,23 @@ function SummaryModal({ summary, onRestart }) {
         <p>You worked for {summary.studied} minutes.</p>
         <p>Pip finished {summary.pip}% of his task.</p>
         <strong>Today's total: {summary.total} minutes.</strong>
+        <div className="closing-question" role="group" aria-labelledby="closing-question-text">
+          {task && <p className="closing-task">“{task}”</p>}
+          <h3 id="closing-question-text">{task ? CLOSING_QUESTION : CLOSING_QUESTION_BLANK_TASK}</h3>
+          <div className="closing-answers">
+            {CLOSING_ANSWERS.map((item) => (
+              <button
+                key={item.id}
+                className={answerId === item.id ? "active" : ""}
+                onClick={() => answer(item)}
+                disabled={Boolean(answerId)}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+          {answered && <p className="closing-reply" role="status">{answered.pipLine}</p>}
+        </div>
         <button onClick={onRestart}>Start another session</button>
       </section>
     </div>
