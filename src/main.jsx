@@ -21,20 +21,12 @@ import {
   X
 } from "lucide-react";
 import { PIP_MOTIVATION_LINES, PIP_SEQUENCES, getPipSequence } from "./data/pipSequences";
+import { PIP_TASKS } from "./data/pipTasks.js";
 import { PIP_THREADS, getThreadsByTrigger } from "./data/pipThreads";
 import { DeskScene, PipFace } from "./pip/DeskScene.jsx";
 import "./styles.css";
 
 const assetUrl = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
-
-const PIP_TASKS = [
-  "Finish my portfolio section.",
-  "Review my interview notes.",
-  "Complete my application draft.",
-  "Revise my weak topics.",
-  "Finish my deadline plan.",
-  "Practise my exam questions."
-];
 
 const SCRIPTED_EVENTS = [
   { minute: 5, text: "You have not failed because this feels hard. Let's stay with the next small bit." },
