@@ -8,9 +8,10 @@ import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 
 const BASE = process.env.SD1_BASE || "b8190052";
-const root = new URL("..", import.meta.url).pathname;
+const gitRoot = new URL("..", import.meta.url).pathname;
+const root = process.env.SD1_ROOT || gitRoot; // SD1_ROOT lets a test point the check at an edited copy
 const tmp = mkdtempSync(join(tmpdir(), "sd1-"));
-const gitShow = (path) => execSync(`git show ${BASE}:${path}`, { cwd: root, encoding: "utf8" });
+const gitShow = (path) => execSync(`git show ${BASE}:${path}`, { cwd: gitRoot, encoding: "utf8" });
 
 // Renames that are structure, not wording (identifier renames only).
 const KEY_RENAMES = { averyLine: "pipLine", requiresUserAnswer: "waitsForAnswer" };

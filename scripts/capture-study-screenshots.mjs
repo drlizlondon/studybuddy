@@ -30,7 +30,7 @@ for (const viewport of viewports) {
 
   await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "Enter study room" }).click();
-  await page.getByRole("button", { name: "Talk to Avery" }).click();
+  await page.getByRole("button", { name: "Talk to Pip" }).click();
 
   if (!viewport.talkOnly) {
     await page.getByRole("button", { name: "I'm struggling to focus" }).click();

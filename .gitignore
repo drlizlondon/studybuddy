@@ -7,3 +7,6 @@ shots/
 .env.local
 .studybuddy-auth/
 npm-debug.log*
+dist-*/
+test-results/
+playwright-report/
