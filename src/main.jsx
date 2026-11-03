@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { AVERY_MOTIVATION_LINES, AVERY_SEQUENCES, getAverySequence } from "./data/averySequences";
 import { AVERY_THREADS, getThreadsByTrigger } from "./data/averyThreads";
-import { resusCouncilAdult2025 } from "./data/questionBanks/resusCouncilAdult2025";
 import "./styles.css";
 
 const assetUrl = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
@@ -69,7 +68,6 @@ const VIDEO_MEDIA = {
 
 const TALK_OPTIONS = [
   { label: "I'm ready to start", type: "sequence", id: "readyToStart" },
-  { label: "Test me", type: "quiz" },
   { label: "I want to take a break", type: "sequence", id: "breakPrompt" },
   { label: "I'm struggling to focus", type: "sequence", id: "strugglingToFocus" },
   { label: "I'm back", type: "sequence", id: "backFromBreak" },
@@ -79,47 +77,6 @@ const TALK_OPTIONS = [
 ];
 
 const DISPLAY_SIZES = ["comfortable", "large", "extra"];
-const QUIZ_STORAGE_KEY = "studyDoubleAveryQuizAttempts";
-const IMPORTED_QUIZ_BANKS_KEY = "studyDoubleImportedQuizBanks";
-const NOTEBOOKLM_STATIC_MESSAGE = "NotebookLM import needs local/server mode. GitHub Pages is static, so it cannot run the Playwright importer.";
-const QUIZ_TOPICS = [
-  "Adult Choking",
-  "Adult In-Hospital Resuscitation",
-  "Refractory Anaphylaxis",
-  "Traumatic Cardiac Arrest"
-];
-const CORRECT_QUIZ_LINES = [
-  "Good. You knew that.",
-  "Yes. That's the one.",
-  "Nice. Clean answer.",
-  "Exactly. Keep that pattern in your head.",
-  "Good retrieval. That counts."
-];
-const INCORRECT_QUIZ_LINES = [
-  "Not quite. Don't spiral, just read the explanation.",
-  "Close. This is exactly why we practise.",
-  "That one is a useful miss.",
-  "Okay, that gap is now visible. That is progress.",
-  "No panic. We correct it and keep going."
-];
-
-const createInactiveQuizState = () => ({
-  quizState: "inactive",
-  activeQuestionBankId: null,
-  selectedTopic: null,
-  selectedQuestions: [],
-  currentQuestionIndex: 0,
-  answers: [],
-  score: 0,
-  streak: 0,
-  wrongStreak: 0,
-  confidenceRating: null,
-  startedAt: null,
-  completedAt: null,
-  shortfallNote: "",
-  averyLine: ""
-});
-
 function getSavedDisplaySize() {
   if (typeof window === "undefined") return "large";
   const saved = window.localStorage.getItem("studyDoubleDisplaySize");
@@ -129,214 +86,6 @@ function getSavedDisplaySize() {
 function getSavedViewportSetting() {
   if (typeof window === "undefined") return false;
   return window.localStorage.getItem("studyDoubleShowViewport") === "true";
-}
-
-function getSavedQuizAttempts() {
-  if (typeof window === "undefined") return [];
-  try {
-    const attempts = JSON.parse(window.localStorage.getItem(QUIZ_STORAGE_KEY) || "[]");
-    return Array.isArray(attempts) ? attempts.slice(0, 12) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveQuizAttempts(attempts) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(QUIZ_STORAGE_KEY, JSON.stringify(attempts.slice(0, 12)));
-}
-
-function normaliseQuestionBank(bank) {
-  const id = bank?.id || `imported-${Date.now()}`;
-  const questions = Array.isArray(bank?.questions) ? bank.questions : [];
-  return {
-    id,
-    name: bank?.name || "Imported NotebookLM Quiz",
-    description: bank?.description || "Imported from a shared NotebookLM artifact.",
-    source: bank?.source || "NotebookLM shared artifact",
-    importedAt: bank?.importedAt || new Date().toISOString(),
-    questions: questions.map((question, index) => ({
-      id: question.id || `${id}_${String(index + 1).padStart(3, "0")}`,
-      topic: question.topic || "Imported",
-      difficulty: ["easy", "medium", "hard"].includes(question.difficulty) ? question.difficulty : "medium",
-      question: question.question || "",
-      options: Array.isArray(question.options) ? question.options.slice(0, 4) : [],
-      correctAnswerIndex: Number.isInteger(question.correctAnswerIndex) ? question.correctAnswerIndex : null,
-      explanation: question.explanation || "",
-      tags: Array.isArray(question.tags) ? question.tags : ["notebooklm", "imported"]
-    })).filter((question) => question.question && question.options.length >= 2)
-  };
-}
-
-function getSavedImportedQuestionBanks() {
-  if (typeof window === "undefined") return [];
-  try {
-    const banks = JSON.parse(window.localStorage.getItem(IMPORTED_QUIZ_BANKS_KEY) || "[]");
-    return Array.isArray(banks) ? banks.map(normaliseQuestionBank).filter((bank) => bank.questions.length) : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveImportedQuestionBanks(banks) {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(IMPORTED_QUIZ_BANKS_KEY, JSON.stringify(banks.slice(0, 10)));
-}
-
-function isStaticGithubPages() {
-  if (typeof window === "undefined") return false;
-  return window.location.hostname.endsWith("github.io");
-}
-
-function optionIndexFromLabel(label) {
-  const normalised = String(label || "").trim().toUpperCase();
-  if (/^[A-D]$/.test(normalised)) return normalised.charCodeAt(0) - 65;
-  return null;
-}
-
-function parseQuestionBankFromText(rawText) {
-  const lines = String(rawText || "")
-    .replace(/\u00a0/g, " ")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-  const questions = [];
-  let current = null;
-  let title = "Pasted Avery Quiz";
-
-  const flush = () => {
-    if (!current) return;
-    if (current.question && current.options.length >= 2) {
-      questions.push({
-        id: `pasted_${String(questions.length + 1).padStart(3, "0")}`,
-        topic: current.topic || "Pasted quiz",
-        difficulty: "medium",
-        question: current.question,
-        options: current.options.slice(0, 4),
-        correctAnswerIndex: Number.isInteger(current.correctAnswerIndex) ? current.correctAnswerIndex : null,
-        explanation: current.explanation || "",
-        tags: ["pasted", "imported"]
-      });
-    }
-    current = null;
-  };
-
-  for (const line of lines) {
-    const titleMatch = line.match(/^(?:title|quiz)\s*[:\-]\s*(.+)$/i);
-    const questionMatch =
-      line.match(/^(?:question\s*)?(\d{1,3})[\).:-]\s+(.+)$/i) ||
-      line.match(/^Q(?:uestion)?\s*(\d{1,3})[\).:-]\s+(.+)$/i);
-    const optionMatch = line.match(/^([A-D])[\).:-]\s+(.+)$/i);
-    const answerMatch = line.match(/^(?:answer|correct answer|key)\s*[:\-]\s*([A-D])(?:[\).:-]\s*)?(.*)$/i);
-    const explanationMatch = line.match(/^(?:explanation|rationale|why)\s*[:\-]\s*(.+)$/i);
-    const topicMatch = line.match(/^(?:topic|section)\s*[:\-]\s*(.+)$/i);
-
-    if (titleMatch && !questions.length && !current) {
-      title = titleMatch[1];
-      continue;
-    }
-
-    if (questionMatch) {
-      flush();
-      current = { question: questionMatch[2], options: [], correctAnswerIndex: null, explanation: "", topic: "" };
-      continue;
-    }
-
-    if (!current && line.endsWith("?")) {
-      flush();
-      current = { question: line, options: [], correctAnswerIndex: null, explanation: "", topic: "" };
-      continue;
-    }
-
-    if (!current) continue;
-
-    if (optionMatch) {
-      current.options.push(optionMatch[2]);
-      continue;
-    }
-
-    if (answerMatch) {
-      current.correctAnswerIndex = optionIndexFromLabel(answerMatch[1]);
-      if (answerMatch[2]) current.explanation = [current.explanation, answerMatch[2]].filter(Boolean).join(" ");
-      continue;
-    }
-
-    if (explanationMatch) {
-      current.explanation = [current.explanation, explanationMatch[1]].filter(Boolean).join(" ");
-      continue;
-    }
-
-    if (topicMatch) {
-      current.topic = topicMatch[1];
-    }
-  }
-
-  flush();
-
-  return normaliseQuestionBank({
-    id: `pasted-${Date.now()}`,
-    name: title,
-    description: "Imported from pasted ready-made quiz text.",
-    source: "Pasted quiz text",
-    questions
-  });
-}
-
-function getBankTopics(bank) {
-  return [...new Set((bank?.questions || []).map((question) => question.topic).filter(Boolean))];
-}
-
-function shuffleItems(items) {
-  return [...items]
-    .map((item) => ({ item, sort: Math.random() }))
-    .sort((a, b) => a.sort - b.sort)
-    .map(({ item }) => item);
-}
-
-function pickQuizQuestions(bank, amount, topic = null) {
-  const pool = topic ? bank.questions.filter((question) => question.topic === topic) : bank.questions;
-  const selected = shuffleItems(pool).slice(0, amount);
-  return {
-    selected,
-    shortfallNote:
-      selected.length < amount ? `Only ${selected.length} ${topic ? "topic " : ""}questions are available, so Avery will use all of them.` : ""
-  };
-}
-
-function getTopicSummary(answers) {
-  const byTopic = answers.reduce((summary, answer) => {
-    const topic = answer.question.topic;
-    const current = summary[topic] || { topic, correct: 0, total: 0 };
-    current.total += 1;
-    if (answer.isCorrect) current.correct += 1;
-    summary[topic] = current;
-    return summary;
-  }, {});
-  const topics = Object.values(byTopic);
-  if (!topics.length) return { strongestTopic: null, weakestTopic: null, weakTopics: [] };
-  const sorted = [...topics].sort((a, b) => a.correct / a.total - b.correct / b.total);
-  return {
-    strongestTopic: sorted[sorted.length - 1]?.topic || null,
-    weakestTopic: sorted[0]?.topic || null,
-    weakTopics: sorted.filter((topic) => topic.correct < topic.total).map((topic) => topic.topic)
-  };
-}
-
-function getDifficultyBreakdown(answers) {
-  return answers.reduce((breakdown, answer) => {
-    const key = answer.question.difficulty;
-    const current = breakdown[key] || { correct: 0, total: 0 };
-    current.total += 1;
-    if (answer.isCorrect) current.correct += 1;
-    breakdown[key] = current;
-    return breakdown;
-  }, {});
-}
-
-function getCompletionLine(percentage) {
-  if (percentage >= 80) return "That's strong. You can trust more of this than you think.";
-  if (percentage >= 50) return "Good working set. There are gaps, but they're fixable.";
-  return "That felt rough, but it gave us a map. We know what to revisit.";
 }
 
 function minutesToLabel(totalMinutes) {
@@ -504,20 +253,6 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [displaySettingsOpen, setDisplaySettingsOpen] = useState(false);
   const [displaySize, setDisplaySize] = useState(getSavedDisplaySize);
   const [showViewport, setShowViewport] = useState(getSavedViewportSetting);
-  const [quiz, setQuiz] = useState(createInactiveQuizState);
-  const [quizSetupStep, setQuizSetupStep] = useState("count");
-  const [showRevisionScores, setShowRevisionScores] = useState(false);
-  const [quizAttempts, setQuizAttempts] = useState(getSavedQuizAttempts);
-  const [importedQuestionBanks, setImportedQuestionBanks] = useState(getSavedImportedQuestionBanks);
-  const [activeQuestionBankId, setActiveQuestionBankId] = useState(resusCouncilAdult2025.id);
-  const [notebookImportOpen, setNotebookImportOpen] = useState(false);
-  const [notebookImportUrl, setNotebookImportUrl] = useState("");
-  const [notebookImportStatus, setNotebookImportStatus] = useState("idle");
-  const [notebookImportError, setNotebookImportError] = useState("");
-  const [notebookImportPreview, setNotebookImportPreview] = useState(null);
-  const [pastedQuizText, setPastedQuizText] = useState("");
-  const [notebookAuthStatus, setNotebookAuthStatus] = useState({ connected: false, authInProgress: false });
-  const [notebookAuthMessage, setNotebookAuthMessage] = useState("");
   const [viewport, setViewport] = useState(() => ({
     width: typeof window === "undefined" ? 0 : window.innerWidth,
     height: typeof window === "undefined" ? 0 : window.innerHeight
@@ -532,17 +267,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
   const progress = Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 88 + averyBoost));
   const sprintActive = miniSprintRemaining > 0;
-  const isQuizActive = quiz.quizState !== "inactive";
-  const questionBanks = useMemo(() => [resusCouncilAdult2025, ...importedQuestionBanks], [importedQuestionBanks]);
-  const activeQuestionBank = questionBanks.find((bank) => bank.id === activeQuestionBankId) || resusCouncilAdult2025;
   const hasActiveMessage = isMessageVisible && messageKey > 0;
   const averyVisualState = useMemo(() => {
-    if (isQuizActive || showBreakPrompt || ["open", "averySpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
+    if (showBreakPrompt || ["open", "averySpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
       return "engaging";
     }
     if (!hasPlayedWorkingStart) return "workingStart";
     return "workingLoop";
-  }, [conversationState, hasPlayedWorkingStart, isQuizActive, showBreakPrompt]);
+  }, [conversationState, hasPlayedWorkingStart, showBreakPrompt]);
 
   const say = (text, actions = []) => {
     setMessage(text);
@@ -631,7 +363,6 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       talkOpen ||
       musicPrompt ||
       showBreakPrompt ||
-      isQuizActive ||
       isBreak ||
       ["open", "waitingForUser"].includes(conversationState);
 
@@ -646,7 +377,6 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     conversationState,
     isBreak,
     isMessageVisible,
-    isQuizActive,
     messageKey,
     musicPrompt,
     showBreakPrompt,
@@ -771,294 +501,8 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     resolveAveryChoice(option);
   };
 
-  const enterQuizSetup = () => {
-    setHasPlayedWorkingStart(true);
-    setTalkOpen(true);
-    setShowRevisionScores(false);
-    setNotebookImportOpen(false);
-    setQuizSetupStep("count");
-    setQuiz({
-      ...createInactiveQuizState(),
-      quizState: "setup",
-      activeQuestionBankId: activeQuestionBank.id,
-      averyLine: "Okay. I'll test you properly. How many questions?"
-    });
-    setConversationState("waitingForUser");
-    say("Okay. I'll test you properly. How many questions?");
-  };
-
-  const startQuiz = (amount, topic = null) => {
-    const bank = activeQuestionBank;
-    const { selected, shortfallNote } = pickQuizQuestions(bank, amount, topic);
-    if (!selected.length) {
-      say("I can't find questions for that topic yet. Pick another one and we'll keep going.");
-      setQuizSetupStep("topic");
-      return;
-    }
-    setTalkOpen(true);
-    setShowRevisionScores(false);
-    setQuiz({
-      ...createInactiveQuizState(),
-      quizState: "askingQuestion",
-      activeQuestionBankId: bank.id,
-      selectedTopic: topic,
-      selectedQuestions: selected,
-      startedAt: new Date().toISOString(),
-      shortfallNote,
-      averyLine: shortfallNote || "Question one. Take it carefully."
-    });
-    setConversationState("waitingForUser");
-    say(shortfallNote || "Question one. Take it carefully.");
-  };
-
-  const importNotebookLmQuiz = async () => {
-    if (isStaticGithubPages()) {
-      setNotebookImportStatus("error");
-      setNotebookImportError(NOTEBOOKLM_STATIC_MESSAGE);
-      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
-      return;
-    }
-
-    const url = notebookImportUrl.trim();
-    if (!url) {
-      setNotebookImportStatus("error");
-      setNotebookImportError("Paste a shared NotebookLM artifact URL first.");
-      return;
-    }
-
-    setNotebookImportStatus("loading");
-    setNotebookImportError("");
-    setNotebookImportPreview(null);
-
-    try {
-      const response = await fetch("/api/import-notebooklm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
-      });
-      const result = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(result.error || "Import failed.");
-      const bank = normaliseQuestionBank(result.questionBank);
-      if (!bank.questions.length) throw new Error("No quiz questions were detected in that NotebookLM artifact.");
-      setNotebookImportPreview(bank);
-      setNotebookImportStatus("success");
-    } catch (error) {
-      setNotebookImportStatus("error");
-      setNotebookImportError(error.message || "Parsing failed. Try a public NotebookLM quiz artifact link.");
-    }
-  };
-
-  const saveNotebookLmImport = () => {
-    if (!notebookImportPreview?.questions?.length) return;
-    const bank = {
-      ...notebookImportPreview,
-      id: notebookImportPreview.id || `notebooklm-${Date.now()}`,
-      importedAt: new Date().toISOString()
-    };
-    setImportedQuestionBanks((banks) => {
-      const updated = [bank, ...banks.filter((item) => item.id !== bank.id)].slice(0, 10);
-      saveImportedQuestionBanks(updated);
-      return updated;
-    });
-    setActiveQuestionBankId(bank.id);
-    setNotebookImportOpen(false);
-    setNotebookImportStatus("idle");
-    setNotebookImportUrl("");
-    setPastedQuizText("");
-    setNotebookImportPreview(null);
-    setQuizSetupStep("count");
-    setQuiz((current) => ({
-      ...current,
-      activeQuestionBankId: bank.id,
-      averyLine: `Saved ${bank.questions.length} questions to Avery.`
-    }));
-    say(`Saved ${bank.questions.length} questions to Avery.`);
-  };
-
-  const previewPastedQuiz = () => {
-    const bank = parseQuestionBankFromText(pastedQuizText);
-    if (!bank.questions.length) {
-      setNotebookImportStatus("error");
-      setNotebookImportError("I could not find MCQs in that pasted text. Use numbered questions with A/B/C/D options.");
-      setNotebookImportPreview(null);
-      return;
-    }
-    setNotebookImportPreview(bank);
-    setNotebookImportStatus("success");
-    setNotebookImportError("");
-  };
-
-  const refreshNotebookLmAuthStatus = async () => {
-    if (isStaticGithubPages()) {
-      const status = { connected: false, authInProgress: false, unavailable: true };
-      setNotebookAuthStatus(status);
-      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
-      return status;
-    }
-
-    try {
-      const response = await fetch("/api/notebooklm-auth/status");
-      const status = await response.json();
-      setNotebookAuthStatus(status);
-      return status;
-    } catch {
-      setNotebookAuthMessage("Could not check NotebookLM connection.");
-      return null;
-    }
-  };
-
-  const startNotebookLmLogin = async () => {
-    if (isStaticGithubPages()) {
-      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
-      return;
-    }
-
-    setNotebookAuthMessage("Opening NotebookLM sign-in window...");
-    try {
-      const response = await fetch("/api/notebooklm-auth/start", { method: "POST" });
-      const status = await response.json();
-      if (!response.ok) throw new Error(status.error || "Could not open NotebookLM sign-in window.");
-      setNotebookAuthStatus(status);
-      setNotebookAuthMessage(status.message || "Sign in, then press Done signing in.");
-    } catch (error) {
-      setNotebookAuthMessage(error.message || "Could not open NotebookLM sign-in window.");
-    }
-  };
-
-  const finishNotebookLmLogin = async () => {
-    if (isStaticGithubPages()) {
-      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
-      return;
-    }
-
-    setNotebookAuthMessage("Saving NotebookLM session...");
-    try {
-      const response = await fetch("/api/notebooklm-auth/finish", { method: "POST" });
-      const status = await response.json();
-      if (!response.ok) throw new Error(status.error || "Could not save NotebookLM session.");
-      setNotebookAuthStatus(status);
-      setNotebookAuthMessage(status.message || "NotebookLM connected locally.");
-    } catch (error) {
-      setNotebookAuthMessage(error.message || "Could not save NotebookLM session.");
-    }
-  };
-
-  const disconnectNotebookLmLogin = async () => {
-    if (isStaticGithubPages()) {
-      setNotebookAuthMessage(NOTEBOOKLM_STATIC_MESSAGE);
-      return;
-    }
-
-    try {
-      const response = await fetch("/api/notebooklm-auth/disconnect", { method: "POST" });
-      const status = await response.json();
-      setNotebookAuthStatus(status);
-      setNotebookAuthMessage("NotebookLM disconnected locally.");
-    } catch {
-      setNotebookAuthMessage("Could not disconnect NotebookLM.");
-    }
-  };
-
-  const answerQuizQuestion = (answerIndex) => {
-    setQuiz((current) => {
-      if (current.quizState !== "askingQuestion") return current;
-      const question = current.selectedQuestions[current.currentQuestionIndex];
-      if (!question) return current;
-      const isCorrect = answerIndex === question.correctAnswerIndex;
-      const nextStreak = isCorrect ? current.streak + 1 : 0;
-      const nextWrongStreak = isCorrect ? 0 : current.wrongStreak + 1;
-      const answer = {
-        question,
-        selectedAnswerIndex: answerIndex,
-        correctAnswerIndex: question.correctAnswerIndex,
-        isCorrect
-      };
-      let line = isCorrect
-        ? CORRECT_QUIZ_LINES[current.answers.length % CORRECT_QUIZ_LINES.length]
-        : INCORRECT_QUIZ_LINES[current.answers.length % INCORRECT_QUIZ_LINES.length];
-      if (nextStreak === 3) line = "That's three in a row. You're warmer than you think.";
-      if (nextWrongStreak === 2) line = "Slow it down. One careful question at a time.";
-      say(line);
-      return {
-        ...current,
-        quizState: "showingResult",
-        answers: [...current.answers, answer],
-        score: current.score + (isCorrect ? 1 : 0),
-        streak: nextStreak,
-        wrongStreak: nextWrongStreak,
-        averyLine: line
-      };
-    });
-  };
-
-  const completeQuiz = (nextQuiz) => {
-    const total = nextQuiz.selectedQuestions.length;
-    const percentage = total ? Math.round((nextQuiz.score / total) * 100) : 0;
-    const topicSummary = getTopicSummary(nextQuiz.answers);
-    const attempt = {
-      date: nextQuiz.completedAt,
-      questionBankId: nextQuiz.activeQuestionBankId,
-      topic: nextQuiz.selectedTopic,
-      numberOfQuestions: total,
-      score: nextQuiz.score,
-      percentage,
-      topicsMissed: topicSummary.weakTopics,
-      difficultyBreakdown: getDifficultyBreakdown(nextQuiz.answers),
-      completedQuestionIds: nextQuiz.selectedQuestions.map((question) => question.id)
-    };
-    setQuizAttempts((attempts) => {
-      const updated = [attempt, ...attempts].slice(0, 12);
-      saveQuizAttempts(updated);
-      return updated;
-    });
-    say(getCompletionLine(percentage));
-  };
-
-  const goToNextQuizQuestion = () => {
-    setQuiz((current) => {
-      if (current.quizState !== "showingResult") return current;
-      const nextIndex = current.currentQuestionIndex + 1;
-      if (nextIndex >= current.selectedQuestions.length) {
-        const total = current.selectedQuestions.length;
-        const percentage = total ? Math.round((current.score / total) * 100) : 0;
-        const completionLine = getCompletionLine(percentage);
-        const completed = {
-          ...current,
-          quizState: "complete",
-          completedAt: new Date().toISOString(),
-          averyLine: completionLine
-        };
-        completeQuiz(completed);
-        return completed;
-      }
-      const nextLine = `Question ${nextIndex + 1}.`;
-      say(nextLine);
-      return {
-        ...current,
-        quizState: "askingQuestion",
-        currentQuestionIndex: nextIndex,
-        averyLine: nextLine
-      };
-    });
-  };
-
-  const quizBackToWork = () => {
-    setQuiz(createInactiveQuizState());
-    returnToWork("I'm going back to my notes now.");
-  };
-
-  const quizTakeFive = () => {
-    setQuiz(createInactiveQuizState());
-    setTalkOpen(false);
-    startBreak(5);
-  };
-
   const returnToWork = (line = pendingBackToWorkLine) => {
     setTalkOpen(false);
-    setQuiz(createInactiveQuizState());
-    setQuizSetupStep("count");
-    setShowRevisionScores(false);
-    setNotebookImportOpen(false);
     setMusicPrompt(false);
     setShowBreakPrompt(false);
     setActiveSequenceId(null);
@@ -1088,7 +532,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setShowBreakPrompt(false);
     setAveryVisualState(sequence.visualState || "engaging");
 
-    if (sequence.requiresUserAnswer) {
+    if (sequence.waitsForAnswer) {
       setConversationState("waitingForUser");
       say(
         sequence.averyLine,
@@ -1241,7 +685,6 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   };
 
   const handleTalk = (option) => {
-    if (option.type === "quiz") enterQuizSetup();
     if (option.type === "sequence") runAverySequence(option.id);
     if (option.type === "thread") runAveryThread(option.trigger);
   };
@@ -1348,7 +791,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   return (
     <main
       ref={roomRef}
-      className={`study-room ${theme} text-${displaySize} ${isFullscreen ? "fullscreen-active" : ""} ${talkOpen ? "talk-open" : ""} ${musicPrompt ? "music-open" : ""} ${isQuizActive ? "quiz-open" : ""} ${hasActiveMessage || talkActions.length || isBreak || showBreakPrompt || isQuizActive ? "context-open" : ""}`}
+      className={`study-room ${theme} text-${displaySize} ${isFullscreen ? "fullscreen-active" : ""} ${talkOpen ? "talk-open" : ""} ${musicPrompt ? "music-open" : ""} ${hasActiveMessage || talkActions.length || isBreak || showBreakPrompt ? "context-open" : ""}`}
     >
       <audio
         ref={audioRef}
@@ -1540,7 +983,6 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             else {
               setHasPlayedWorkingStart(true);
               setTalkOpen(true);
-              setShowRevisionScores(false);
               setConversationState("open");
             }
           }}
@@ -1556,53 +998,9 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             <button className="talk-close" onClick={closeAveryInteraction} aria-label="Close Avery options">
               <X size={16} />
             </button>
-            {isQuizActive ? (
-              <QuizPanel
-                bank={activeQuestionBank}
-                banks={questionBanks}
-                quiz={quiz}
-                setupStep={quizSetupStep}
-                setSetupStep={setQuizSetupStep}
-                activeBankId={activeQuestionBankId}
-                onSelectBank={setActiveQuestionBankId}
-                onStartQuiz={startQuiz}
-                onAnswer={answerQuizQuestion}
-                onNext={goToNextQuizQuestion}
-                onQuizAgain={enterQuizSetup}
-                onBackToWork={quizBackToWork}
-                onTakeFive={quizTakeFive}
-                notebookImportOpen={notebookImportOpen}
-                importUrl={notebookImportUrl}
-                importStatus={notebookImportStatus}
-                importError={notebookImportError}
-                importPreview={notebookImportPreview}
-                pastedQuizText={pastedQuizText}
-                authStatus={notebookAuthStatus}
-                authMessage={notebookAuthMessage}
-                onOpenNotebookImport={() => {
-                  setNotebookImportOpen(true);
-                  refreshNotebookLmAuthStatus();
-                }}
-                onCloseNotebookImport={() => setNotebookImportOpen(false)}
-                onImportUrlChange={setNotebookImportUrl}
-                onPastedQuizTextChange={setPastedQuizText}
-                onImportNotebookLm={importNotebookLmQuiz}
-                onPreviewPastedQuiz={previewPastedQuiz}
-                onSaveNotebookLmImport={saveNotebookLmImport}
-                onStartNotebookLmLogin={startNotebookLmLogin}
-                onFinishNotebookLmLogin={finishNotebookLmLogin}
-                onDisconnectNotebookLmLogin={disconnectNotebookLmLogin}
-              />
-            ) : showRevisionScores ? (
-              <RevisionScores attempts={quizAttempts} onBack={() => setShowRevisionScores(false)} />
-            ) : (
-              <>
-                {TALK_OPTIONS.map((option) => (
-                  <button key={option.label} onClick={() => handleTalk(option)}>{option.label}</button>
-                ))}
-                <button onClick={() => setShowRevisionScores(true)}>Revision score</button>
-              </>
-            )}
+            {TALK_OPTIONS.map((option) => (
+              <button key={option.label} onClick={() => handleTalk(option)}>{option.label}</button>
+            ))}
           </div>
           </>
         )}
@@ -1618,352 +1016,6 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
 
       {summary && <SummaryModal summary={summary} onRestart={onRestart} />}
     </main>
-  );
-}
-
-function QuizPanel({
-  bank,
-  banks,
-  quiz,
-  setupStep,
-  setSetupStep,
-  activeBankId,
-  onSelectBank,
-  onStartQuiz,
-  onAnswer,
-  onNext,
-  onQuizAgain,
-  onBackToWork,
-  onTakeFive,
-  notebookImportOpen,
-  importUrl,
-  importStatus,
-  importError,
-  importPreview,
-  pastedQuizText,
-  authStatus,
-  authMessage,
-  onOpenNotebookImport,
-  onCloseNotebookImport,
-  onImportUrlChange,
-  onPastedQuizTextChange,
-  onImportNotebookLm,
-  onPreviewPastedQuiz,
-  onSaveNotebookLmImport,
-  onStartNotebookLmLogin,
-  onFinishNotebookLmLogin,
-  onDisconnectNotebookLmLogin
-}) {
-  const currentQuestion = quiz.selectedQuestions[quiz.currentQuestionIndex];
-  const latestAnswer = quiz.answers[quiz.answers.length - 1];
-  const total = quiz.selectedQuestions.length;
-  const percentage = total ? Math.round((quiz.score / total) * 100) : 0;
-  const topicSummary = getTopicSummary(quiz.answers);
-  const bankTopics = getBankTopics(bank);
-
-  if (quiz.quizState === "setup") {
-    return (
-      <div className="quiz-panel">
-        <div className="quiz-heading">
-          <span>Quiz setup</span>
-          <h2>{bank.name}</h2>
-          <p>{bank.description}</p>
-        </div>
-        {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
-        <div className="quiz-import-row">
-          <button className="quiz-link-button" onClick={onOpenNotebookImport}>Import from NotebookLM</button>
-        </div>
-        {banks.length > 1 && (
-          <>
-            <div className="quiz-subtitle">Question bank</div>
-            <div className="quiz-choice-grid">
-              {banks.map((item) => (
-                <button
-                  key={item.id}
-                  className={item.id === activeBankId ? "active" : ""}
-                  onClick={() => onSelectBank(item.id)}
-                >
-                  {item.name}
-                  <small>{item.questions.length} questions</small>
-                </button>
-              ))}
-            </div>
-          </>
-        )}
-        {setupStep === "count" && (
-          <div className="quiz-choice-grid">
-            <button onClick={() => onStartQuiz(5)}>5 questions</button>
-            <button onClick={() => onStartQuiz(10)}>10 questions</button>
-            <button onClick={() => setSetupStep("topic")}>Topic quick-fire</button>
-          </div>
-        )}
-        {setupStep === "topic" && (
-          <>
-            <div className="quiz-subtitle">Choose a topic</div>
-            <div className="quiz-choice-grid">
-              {(bankTopics.length ? bankTopics : QUIZ_TOPICS).map((topic) => (
-                <button key={topic} onClick={() => setSetupStep(topic)}>{topic}</button>
-              ))}
-            </div>
-          </>
-        )}
-        {(bankTopics.length ? bankTopics : QUIZ_TOPICS).includes(setupStep) && (
-          <>
-            <div className="quiz-subtitle">How many?</div>
-            <div className="quiz-choice-grid two">
-              <button onClick={() => onStartQuiz(5, setupStep)}>5</button>
-              <button onClick={() => onStartQuiz(10, setupStep)}>10</button>
-            </div>
-            <button className="quiz-link-button" onClick={() => setSetupStep("topic")}>Change topic</button>
-          </>
-        )}
-        {notebookImportOpen && (
-          <NotebookLmImportModal
-            url={importUrl}
-            status={importStatus}
-            error={importError}
-            preview={importPreview}
-            pastedQuizText={pastedQuizText}
-            authStatus={authStatus}
-            authMessage={authMessage}
-            onUrlChange={onImportUrlChange}
-            onPastedQuizTextChange={onPastedQuizTextChange}
-            onImport={onImportNotebookLm}
-            onPreviewPastedQuiz={onPreviewPastedQuiz}
-            onSave={onSaveNotebookLmImport}
-            onClose={onCloseNotebookImport}
-            onStartLogin={onStartNotebookLmLogin}
-            onFinishLogin={onFinishNotebookLmLogin}
-            onDisconnectLogin={onDisconnectNotebookLmLogin}
-          />
-        )}
-      </div>
-    );
-  }
-
-  if (quiz.quizState === "complete") {
-    const correctCount = quiz.score;
-    return (
-      <div className="quiz-panel">
-        <div className="quiz-heading">
-          <span>Quiz complete</span>
-          <h2>{bank.name}</h2>
-        </div>
-        {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
-        <div className="quiz-scoreboard">
-          <div>
-            <span>Score</span>
-            <strong>{correctCount}/{total}</strong>
-          </div>
-          <div>
-            <span>Percentage</span>
-            <strong>{percentage}%</strong>
-          </div>
-          <div>
-            <span>Attempted</span>
-            <strong>{total}</strong>
-          </div>
-          <div>
-            <span>Streak</span>
-            <strong>{quiz.streak}</strong>
-          </div>
-        </div>
-        <div className="quiz-summary-lines">
-          <p><strong>Strongest:</strong> {topicSummary.strongestTopic || "Not enough data yet"}</p>
-          <p><strong>Weakest:</strong> {topicSummary.weakestTopic || "Not enough data yet"}</p>
-          <p><strong>Weak topics:</strong> {topicSummary.weakTopics.length ? topicSummary.weakTopics.join(", ") : "None this round"}</p>
-        </div>
-        <div className="quiz-actions">
-          <button onClick={onQuizAgain}>Quiz me again</button>
-          <button onClick={onBackToWork}>Back to work</button>
-          <button onClick={onTakeFive}>Take 5</button>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentQuestion) {
-    return (
-      <div className="quiz-panel">
-        <p>No question is loaded yet.</p>
-      </div>
-    );
-  }
-
-  const locked = quiz.quizState === "showingResult";
-  return (
-    <div className="quiz-panel">
-      <div className="quiz-heading">
-        <span>{bank.name}</span>
-        <h2>Question {quiz.currentQuestionIndex + 1} of {total}</h2>
-        {quiz.shortfallNote && <p>{quiz.shortfallNote}</p>}
-      </div>
-      {quiz.averyLine && <div className="quiz-avery-line">{quiz.averyLine}</div>}
-      <div className="quiz-meta-row">
-        <span>{currentQuestion.topic}</span>
-        <span>{currentQuestion.difficulty}</span>
-        <span>Score {quiz.score}/{total}</span>
-        <span>Streak {quiz.streak}</span>
-      </div>
-      <p className="quiz-question">{currentQuestion.question}</p>
-      <div className="quiz-answer-grid">
-        {currentQuestion.options.map((option, index) => {
-          const isSelected = latestAnswer?.selectedAnswerIndex === index;
-          const isCorrect = currentQuestion.correctAnswerIndex === index;
-          const resultClass = locked && isCorrect ? "correct" : locked && isSelected ? "incorrect" : "";
-          return (
-            <button
-              key={option}
-              className={resultClass}
-              onClick={() => onAnswer(index)}
-              disabled={locked}
-            >
-              {option}
-            </button>
-          );
-        })}
-      </div>
-      {locked && latestAnswer && (
-        <div className={latestAnswer.isCorrect ? "quiz-result correct" : "quiz-result incorrect"}>
-          <strong>{latestAnswer.isCorrect ? "Correct" : "Not quite"}</strong>
-          <p>{currentQuestion.explanation}</p>
-          <button onClick={onNext}>
-            {quiz.currentQuestionIndex + 1 === total ? "Finish quiz" : "Next question"}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function RevisionScores({ attempts, onBack }) {
-  return (
-    <div className="quiz-panel">
-      <div className="quiz-heading">
-        <span>Revision score</span>
-        <h2>Recent Avery quizzes</h2>
-      </div>
-      {!attempts.length && <p className="quiz-empty">No quiz attempts saved yet.</p>}
-      {attempts.length > 0 && (
-        <div className="revision-score-list">
-          {attempts.slice(0, 5).map((attempt) => (
-            <div key={`${attempt.date}-${attempt.completedQuestionIds.join("-")}`} className="revision-score-item">
-              <strong>{attempt.score}/{attempt.numberOfQuestions} · {attempt.percentage}%</strong>
-              <span>{attempt.topic || "Mixed quiz"} · {new Date(attempt.date).toLocaleDateString()}</span>
-              <small>{attempt.topicsMissed.length ? `Weak: ${attempt.topicsMissed.join(", ")}` : "No weak topics saved"}</small>
-            </div>
-          ))}
-        </div>
-      )}
-      <button className="quiz-link-button" onClick={onBack}>Back</button>
-    </div>
-  );
-}
-
-function NotebookLmImportModal({
-  url,
-  status,
-  error,
-  preview,
-  pastedQuizText,
-  authStatus,
-  authMessage,
-  onUrlChange,
-  onPastedQuizTextChange,
-  onImport,
-  onPreviewPastedQuiz,
-  onSave,
-  onClose,
-  onStartLogin,
-  onFinishLogin,
-  onDisconnectLogin
-}) {
-  const isLoading = status === "loading";
-  return (
-    <div className="quiz-modal-backdrop">
-      <section className="quiz-import-modal">
-        <button className="talk-close" onClick={onClose} aria-label="Close NotebookLM import">
-          <X size={16} />
-        </button>
-        <div className="quiz-heading">
-          <span>NotebookLM import</span>
-          <h2>Import shared quiz</h2>
-          <p>Shared NotebookLM artifact links only. Avery can use a local signed-in session when the artifact asks for Google login.</p>
-        </div>
-        <div className="quiz-auth-card">
-          <div>
-            <strong>{authStatus?.connected ? "NotebookLM connected" : authStatus?.authInProgress ? "Sign-in window open" : "NotebookLM not connected"}</strong>
-            <span>{authMessage || "Connect locally if this artifact asks for Google sign-in."}</span>
-          </div>
-          <div className="quiz-auth-actions">
-            <button onClick={onStartLogin} disabled={isLoading}>
-              {authStatus?.connected ? "Reconnect" : "Connect NotebookLM"}
-            </button>
-            {authStatus?.authInProgress && (
-              <button onClick={onFinishLogin} disabled={isLoading}>Done signing in</button>
-            )}
-            {authStatus?.connected && (
-              <button onClick={onDisconnectLogin} disabled={isLoading}>Disconnect</button>
-            )}
-          </div>
-        </div>
-        <label className="quiz-import-field">
-          <span>Artifact URL</span>
-          <input
-            type="text"
-            inputMode="url"
-            autoCapitalize="none"
-            spellCheck="false"
-            value={url}
-            onChange={(event) => onUrlChange(event.target.value)}
-            placeholder="https://notebooklm.google.com/..."
-            disabled={isLoading}
-          />
-        </label>
-        <div className="quiz-actions">
-          <button onClick={onImport} disabled={isLoading}>
-            {isLoading ? "Importing..." : "Import"}
-          </button>
-          <button onClick={onClose} disabled={isLoading}>Cancel</button>
-        </div>
-        <div className="quiz-paste-card">
-          <div className="quiz-heading">
-            <span>Ready-made quiz</span>
-            <h2>Paste quiz text</h2>
-            <p>Use numbered questions with A/B/C/D options. Answer and explanation lines are optional.</p>
-          </div>
-          <textarea
-            value={pastedQuizText}
-            onChange={(event) => onPastedQuizTextChange(event.target.value)}
-            aria-label="Paste ready-made quiz text"
-            rows={8}
-            placeholder={"Title: Adult revision quiz\n1. What is the first step?\nA. Option one\nB. Option two\nC. Option three\nD. Option four\nAnswer: B\nExplanation: Short reason."}
-            disabled={isLoading}
-          />
-          <button className="quiz-link-button" onClick={onPreviewPastedQuiz} disabled={isLoading}>
-            Preview pasted quiz
-          </button>
-        </div>
-        {status === "error" && <div className="quiz-import-status error">{error}</div>}
-        {status === "success" && preview && (
-          <div className="quiz-import-preview">
-            <div className="quiz-import-status success">
-              Found {preview.questions.length} questions in “{preview.name}”.
-            </div>
-            <div className="quiz-import-question-list">
-              {preview.questions.slice(0, 5).map((question, index) => (
-                <div key={question.id || index} className="quiz-import-question">
-                  <strong>{index + 1}. {question.question}</strong>
-                  <span>{question.options.length} options · {question.topic || "Imported"}</span>
-                </div>
-              ))}
-            </div>
-            {preview.questions.length > 5 && <p className="quiz-empty">Previewing first 5 questions.</p>}
-            <button className="quiz-link-button" onClick={onSave}>Save to Avery</button>
-          </div>
-        )}
-      </section>
-    </div>
   );
 }
 

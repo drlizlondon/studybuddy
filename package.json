@@ -13,7 +13,6 @@
     "@tailwindcss/postcss": "^4.2.4",
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
-    "playwright": "^1.59.1",
     "react": "latest",
     "react-dom": "latest",
     "vite": "latest"
