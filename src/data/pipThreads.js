@@ -1,4 +1,4 @@
-export const AVERY_THREADS = [
+export const PIP_THREADS = [
   {
     id: "dont-want-to-revise",
     trigger: "I don't want to revise anymore",
@@ -374,5 +374,5 @@ export const AVERY_THREADS = [
 ];
 
 export function getThreadsByTrigger(trigger) {
-  return AVERY_THREADS.filter((thread) => thread.trigger === trigger);
+  return PIP_THREADS.filter((thread) => thread.trigger === trigger);
 }

@@ -20,13 +20,14 @@ import {
   Volume2,
   X
 } from "lucide-react";
-import { AVERY_MOTIVATION_LINES, AVERY_SEQUENCES, getAverySequence } from "./data/averySequences";
-import { AVERY_THREADS, getThreadsByTrigger } from "./data/averyThreads";
+import { PIP_MOTIVATION_LINES, PIP_SEQUENCES, getPipSequence } from "./data/pipSequences";
+import { PIP_THREADS, getThreadsByTrigger } from "./data/pipThreads";
+import { DeskScene, PipFace } from "./pip/DeskScene.jsx";
 import "./styles.css";
 
 const assetUrl = (path) => `${import.meta.env.BASE_URL}${path.replace(/^\/+/, "")}`;
 
-const AVERY_TASKS = [
+const PIP_TASKS = [
   "Finish my portfolio section.",
   "Review my interview notes.",
   "Complete my application draft.",
@@ -50,21 +51,7 @@ const TRACKS = {
   nature: { name: "Nature sounds", src: assetUrl("/audio/nature-sounds.mp3") }
 };
 
-const VIDEO_MEDIA = {
-  day: {
-    workingStart: assetUrl("/video/day/day-working-start.mp4"),
-    workingLoop: assetUrl("/video/day/day-working-loop.mp4"),
-    engaging: assetUrl("/video/day/day-engaging.mp4"),
-    fallback: assetUrl("/images/master-day-frame.png")
-  },
-  evening: {
-    workingStart: assetUrl("/video/evening/evening-working-start.mp4"),
-    workingLoop: assetUrl("/video/evening/evening-working-loop.mp4"),
-    engaging: assetUrl("/video/evening/evening-engaging.mp4"),
-    engagingFallback: assetUrl("/images/evening-engaging-still.png"),
-    fallback: assetUrl("/images/master-evening-frame.png")
-  }
-};
+const PIP_VISUAL_STATE_MAP = { workingStart: "settling", workingLoop: "work", engaging: "engaging" };
 
 const TALK_OPTIONS = [
   { label: "I'm ready to start", type: "sequence", id: "readyToStart" },
@@ -117,7 +104,7 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
     <main className={`opening-screen ${theme}`}>
       <section className="opening-room" aria-hidden="true">
         <div className="opening-bg-stack">
-          <img src={VIDEO_MEDIA[theme].fallback} alt="" />
+          <div className={`room-backdrop room-backdrop--${theme}`} />
           <div className="opening-light" />
           <div className="opening-haze" />
           <div className="opening-grain" />
@@ -178,7 +165,7 @@ function OpeningScreen({ onStart, theme, onToggleTheme }) {
           />
         </label>
         <div className="break-toggle">
-          <span>Should Avery suggest breaks?</span>
+          <span>Should Pip suggest breaks?</span>
           <div>
             <button className={breaks ? "toggle active" : "toggle"} onClick={() => setBreaks(true)}>yes</button>
             <button className={!breaks ? "toggle active" : "toggle"} onClick={() => setBreaks(false)}>no</button>
@@ -225,7 +212,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [isTimerMinimized, setIsTimerMinimized] = useState(true);
   const [isBreak, setIsBreak] = useState(false);
   const [breakLength, setBreakLength] = useState(0);
-  const [message, setMessage] = useState(AVERY_SEQUENCES.sessionStart.averyLine);
+  const [message, setMessage] = useState(PIP_SEQUENCES.sessionStart.pipLine);
   const [isMessageVisible, setIsMessageVisible] = useState(true);
   const [messageKey, setMessageKey] = useState(1);
   const [talkOpen, setTalkOpen] = useState(false);
@@ -239,14 +226,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   const [audioAvailable, setAudioAvailable] = useState(false);
   const [audioChecked, setAudioChecked] = useState(false);
   const [miniSprintRemaining, setMiniSprintRemaining] = useState(0);
-  const [averyBoost, setAveryBoost] = useState(0);
+  const [pipBoost, setPipBoost] = useState(0);
   const [conversationState, setConversationState] = useState("closed");
   const [activeSequenceId, setActiveSequenceId] = useState("sessionStart");
   const [activeThreadId, setActiveThreadId] = useState(null);
   const [threadNodeId, setThreadNodeId] = useState("start");
   const [completedThreadIds, setCompletedThreadIds] = useState(() => {
     if (typeof window === "undefined") return [];
-    return JSON.parse(window.localStorage.getItem("studyDoubleCompletedAveryThreads") || "[]");
+    return JSON.parse(window.localStorage.getItem("studyDoubleCompletedPipThreads") || "[]");
   });
   const [pendingBackToWorkLine, setPendingBackToWorkLine] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -259,22 +246,24 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   }));
   const [summary, setSummary] = useState(null);
   const [hasPlayedWorkingStart, setHasPlayedWorkingStart] = useState(false);
+  const [workMode, setWorkMode] = useState("reading");
   const audioRef = useRef(null);
   const isMusicPlayingRef = useRef(false);
   const sprintWasActiveRef = useRef(false);
-  const averyTask = useMemo(() => AVERY_TASKS[Math.floor(Math.random() * AVERY_TASKS.length)], []);
+  const pipTask = useMemo(() => PIP_TASKS[Math.floor(Math.random() * PIP_TASKS.length)], []);
   const elapsedSeconds = totalSeconds - remaining;
   const elapsedMinutes = Math.floor(elapsedSeconds / 60);
-  const progress = Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 88 + averyBoost));
+  const progress = Math.min(100, Math.round((elapsedSeconds / totalSeconds) * 88 + pipBoost));
   const sprintActive = miniSprintRemaining > 0;
   const hasActiveMessage = isMessageVisible && messageKey > 0;
-  const averyVisualState = useMemo(() => {
-    if (showBreakPrompt || ["open", "averySpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
+  const pipState = useMemo(() => {
+    if (isBreak) return "break";
+    if (showBreakPrompt || ["open", "pipSpeaking", "waitingForUser", "resolving"].includes(conversationState)) {
       return "engaging";
     }
-    if (!hasPlayedWorkingStart) return "workingStart";
-    return "workingLoop";
-  }, [conversationState, hasPlayedWorkingStart, showBreakPrompt]);
+    if (!hasPlayedWorkingStart) return "settling";
+    return workMode;
+  }, [conversationState, hasPlayedWorkingStart, isBreak, showBreakPrompt, workMode]);
 
   const say = (text, actions = []) => {
     setMessage(text);
@@ -290,13 +279,27 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     onThemeChange?.(next);
   };
 
+  // Pip settles in for a few seconds, then gets on with his work.
+  useEffect(() => {
+    const settled = window.setTimeout(() => setHasPlayedWorkingStart(true), 6000);
+    return () => window.clearTimeout(settled);
+  }, []);
+
+  // While you work, Pip alternates reading and writing every 3-6 minutes (random).
+  useEffect(() => {
+    if (isPaused || isBreak || summary) return undefined;
+    const delay = (3 + Math.random() * 3) * 60 * 1000;
+    const swap = window.setTimeout(() => setWorkMode((mode) => (mode === "reading" ? "writing" : "reading")), delay);
+    return () => window.clearTimeout(swap);
+  }, [workMode, isPaused, isBreak, summary]);
+
   useEffect(() => {
     if (isPaused || isBreak || summary) return;
     const tick = window.setInterval(() => {
       setRemaining((value) => Math.max(0, value - 1));
       setMiniSprintRemaining((value) => {
         if (value <= 0) return 0;
-        setAveryBoost((boost) => Math.min(16, boost + 0.012));
+        setPipBoost((boost) => Math.min(16, boost + 0.012));
         return value - 1;
       });
     }, 1000);
@@ -309,7 +312,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     const studiedMinutes = Math.max(1, Math.ceil(totalSeconds / 60));
     const newTotal = previous + studiedMinutes;
     localStorage.setItem("studyDoubleTotalMinutes", String(newTotal));
-    setSummary({ studied: studiedMinutes, total: newTotal, avery: 100 });
+    setSummary({ studied: studiedMinutes, total: newTotal, pip: progress });
     say("We are going to finish cleanly, not dramatically. You showed up. That matters more than your mood.");
   }, [remaining, summary, totalSeconds]);
 
@@ -414,7 +417,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("studyDoubleCompletedAveryThreads", JSON.stringify(completedThreadIds));
+    localStorage.setItem("studyDoubleCompletedPipThreads", JSON.stringify(completedThreadIds));
   }, [completedThreadIds]);
 
   useEffect(() => {
@@ -428,13 +431,16 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     say("You did the 10 minutes. You are closer than you feel when you are tired.", [buildBackToWorkAction()]);
   }, [miniSprintRemaining, summary]);
 
-  const setAveryVisualState = (state) => {
-    if (state === "engaging") {
+  const setPipVisualState = (state) => {
+    // Old visual states map onto Pip's desk states: workingStart -> settling,
+    // workingLoop -> reading or writing, engaging -> engaging.
+    const target = PIP_VISUAL_STATE_MAP[state] ?? "engaging";
+    if (target === "engaging") {
       setHasPlayedWorkingStart(true);
-      setConversationState("averySpeaking");
+      setConversationState("pipSpeaking");
+    } else {
+      setConversationState("closed");
     }
-    else if (state === "workingStart" || state === "workingLoop") setConversationState("closed");
-    else setConversationState("closed");
   };
 
   const applyOutcome = (outcome, payload = {}) => {
@@ -498,7 +504,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       say("Okay, quiet room it is.", [buildBackToWorkAction()]);
       return;
     }
-    resolveAveryChoice(option);
+    resolvePipChoice(option);
   };
 
   const returnToWork = (line = pendingBackToWorkLine) => {
@@ -514,15 +520,8 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setConversationState("closed");
   };
 
-  const handleStartingWorkEnded = () => {
-    setHasPlayedWorkingStart(true);
-    setConversationState("closed");
-    setTalkActions([]);
-    setMusicPrompt(false);
-  };
-
-  const runAverySequence = (sequenceId) => {
-    const sequence = getAverySequence(sequenceId);
+  const runPipSequence = (sequenceId) => {
+    const sequence = getPipSequence(sequenceId);
     if (!sequence) return;
     setTalkOpen(false);
     setActiveSequenceId(sequence.id);
@@ -530,12 +529,12 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     setPendingBackToWorkLine(sequence.backToWorkLine || "");
     setMusicPrompt(sequence.id === "musicPrompt");
     setShowBreakPrompt(false);
-    setAveryVisualState(sequence.visualState || "engaging");
+    setPipVisualState(sequence.visualState || "engaging");
 
     if (sequence.waitsForAnswer) {
       setConversationState("waitingForUser");
       say(
-        sequence.averyLine,
+        sequence.pipLine,
         sequence.options.map((option) => ({
           label: option.label,
           action: () => resolveSequenceOption(option)
@@ -544,13 +543,13 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       return;
     }
 
-    say(sequence.averyLine);
+    say(sequence.pipLine);
     if (sequence.autoReturnToWork) {
       window.setTimeout(() => returnToWork(sequence.backToWorkLine), 2200);
     }
   };
 
-  const runAveryThread = (trigger) => {
+  const runPipThread = (trigger) => {
     const candidates = getThreadsByTrigger(trigger);
     if (!candidates.length) return;
     setHasPlayedWorkingStart(true);
@@ -566,21 +565,21 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     const startNode = thread.nodes.start;
     const openingLine =
       trigger === "I need encouragement"
-        ? AVERY_MOTIVATION_LINES[Math.floor(Math.random() * AVERY_MOTIVATION_LINES.length)]
+        ? PIP_MOTIVATION_LINES[Math.floor(Math.random() * PIP_MOTIVATION_LINES.length)]
         : thread.openingLine;
     say(
       openingLine,
       startNode.userOptions.map((option) => ({
         label: option.label,
-        action: () => resolveAveryChoice({ ...option, threadId: thread.id, fromThread: true })
+        action: () => resolvePipChoice({ ...option, threadId: thread.id, fromThread: true })
       }))
     );
   };
 
-  const resolveAveryChoice = async (choice) => {
+  const resolvePipChoice = async (choice) => {
     setConversationState("resolving");
     if (choice.fromThread) {
-      const thread = AVERY_THREADS.find((item) => item.id === choice.threadId);
+      const thread = PIP_THREADS.find((item) => item.id === choice.threadId);
       if (!thread) return;
       const nextNodeId = choice.nextNode || "final";
       const nextNode = thread.nodes[nextNodeId];
@@ -589,7 +588,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       if (nextNode && nextNodeId !== "final") {
         const nextActions = nextNode.userOptions.map((option) => ({
           label: option.label,
-          action: () => resolveAveryChoice({ ...option, threadId: thread.id, fromThread: true })
+          action: () => resolvePipChoice({ ...option, threadId: thread.id, fromThread: true })
         }));
         say(nextNode.line || thread.finalLine, nextActions);
         setConversationState("waitingForUser");
@@ -604,12 +603,12 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       say(finalLine, isStudyOutcome ? [buildBackToWorkAction()] : []);
       if (!isStudyOutcome && outcome !== "takeBreak") setTalkActions([]);
       if (outcome === "takeBreak") {
-        say(finalLine, [{ label: "Tell Avery when you're back", action: returnFromBreak }]);
+        say(finalLine, [{ label: "Tell Pip when you're back", action: returnFromBreak }]);
       }
       return;
     }
 
-    const sequence = getAverySequence(activeSequenceId);
+    const sequence = getPipSequence(activeSequenceId);
     if (!sequence) return;
     const outcome = choice.outcome || sequence.outcome || "returnToWork";
     let line = sequence.afterChoice[choice.id] || sequence.backToWorkLine || "Okay.";
@@ -631,7 +630,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
 
     const returnsToStudy = ["returnToWork", "playMusic", "startMiniSprint", "changeTask", "addFive"].includes(outcome);
     if (outcome === "takeBreak") {
-      say(line, [{ label: "Tell Avery when you're back", action: returnFromBreak }]);
+      say(line, [{ label: "Tell Pip when you're back", action: returnFromBreak }]);
       return;
     }
     if (outcome === "endSession") {
@@ -641,7 +640,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     say(line, returnsToStudy ? [buildBackToWorkAction()] : []);
   };
 
-  const closeAveryInteraction = () => {
+  const closePipInteraction = () => {
     if (!talkOpen && conversationState === "closed") return;
     returnToWork();
   };
@@ -658,14 +657,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       minutes === 15
         ? "I'm going to make a tea. Tell me when you're back."
         : "I'm going to stretch and make tea. Tell me when you're back.",
-      [{ label: "Tell Avery when you're back", action: returnFromBreak }]
+      [{ label: "Tell Pip when you're back", action: returnFromBreak }]
     );
   };
 
   const returnFromBreak = () => {
     setIsBreak(false);
     setIsPaused(false);
-    runAverySequence("backFromBreak");
+    runPipSequence("backFromBreak");
   };
 
   const startMiniSprint = () => {
@@ -681,12 +680,12 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
     const previous = Number(localStorage.getItem("studyDoubleTotalMinutes") || 0);
     const newTotal = previous + studiedMinutes;
     localStorage.setItem("studyDoubleTotalMinutes", String(newTotal));
-    setSummary({ studied: studiedMinutes, total: newTotal, avery: progress });
+    setSummary({ studied: studiedMinutes, total: newTotal, pip: progress });
   };
 
   const handleTalk = (option) => {
-    if (option.type === "sequence") runAverySequence(option.id);
-    if (option.type === "thread") runAveryThread(option.trigger);
+    if (option.type === "sequence") runPipSequence(option.id);
+    if (option.type === "thread") runPipThread(option.trigger);
   };
 
   const handleTrackError = () => {
@@ -802,7 +801,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         onPause={handleAudioPause}
         onPlay={handleAudioPlay}
       />
-      <RoomScene theme={theme} averyVisualState={averyVisualState} onStartingWorkEnded={handleStartingWorkEnded} />
+      <RoomScene theme={theme} pipState={pipState} />
 
       <section className="display-settings">
         <button
@@ -819,7 +818,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
               <strong>Local display</strong>
               <span>{viewport.width} x {viewport.height} · {viewport.width >= viewport.height ? "landscape" : "portrait"}</span>
             </div>
-            <div className="display-size-options" role="group" aria-label="Avery response size">
+            <div className="display-size-options" role="group" aria-label="Pip response size">
               <button className={displaySize === "comfortable" ? "active" : ""} onClick={() => setDisplaySize("comfortable")}>Comfort</button>
               <button className={displaySize === "large" ? "active" : ""} onClick={() => setDisplaySize("large")}>Large</button>
               <button className={displaySize === "extra" ? "active" : ""} onClick={() => setDisplaySize("extra")}>Extra</button>
@@ -849,14 +848,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       <section className="room-hero">
         <div>
           <p>{theme === "day" ? "Good morning," : "Good evening,"}</p>
-          <h1>Avery</h1>
+          <h1>Pip</h1>
           <span><i /> FOCUSING</span>
         </div>
       </section>
 
       <section className="goal-card floating-card">
-        <div className="card-title"><BookOpen size={18} /> Avery's task</div>
-        <p>{averyTask}</p>
+        <div className="card-title"><BookOpen size={18} /> Pip's task</div>
+        <p>{pipTask}</p>
         <div className="progress-row">
           <div><span style={{ width: `${progress}%` }} /></div>
           <strong>{progress}%</strong>
@@ -871,7 +870,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         <div className="timer-block">
           <span>Study session</span>
           <strong>{formatTime(remaining)}</strong>
-          <small>{sprintActive ? "10-minute push · stay with Avery." : "Stay focused, we've got this."}</small>
+          <small>{sprintActive ? "10-minute push · stay with Pip." : "Stay focused, we've got this."}</small>
         </div>
         <div className="length-block">
           <span>Session length</span>
@@ -907,7 +906,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
 
       {isMessageVisible && (
         <section key={messageKey} className="message-card floating-card">
-          <div className="avatar-mini"><AveryPortrait /></div>
+          <div className="avatar-mini"><PipFace state={pipState} /></div>
           <div>
             <p>{message}</p>
             {musicPrompt && (
@@ -939,7 +938,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
             )}
             {isBreak && (
               <button className="return-button" onClick={returnFromBreak}>
-                Tell Avery when you're back
+                Tell Pip when you're back
               </button>
             )}
           </div>
@@ -947,14 +946,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
       )}
 
       <section className="vibe-card floating-card">
-        <h2>Avery's vibe</h2>
+        <h2>Pip's vibe</h2>
         <div className="vibe-line"><Headphones size={18} /> {trackKey ? TRACKS[trackKey].name : "Quiet room"}</div>
         {audioChecked && !audioAvailable && <p className="audio-note">Add audio files to /public/audio to enable music.</p>}
         <button onClick={toggleMusic} disabled={!trackKey || !audioAvailable}>
           {isMusicPlaying ? <Pause size={16} /> : <Play size={16} />}
           {isMusicPlaying ? "Pause" : "Play"}
         </button>
-        <button onClick={() => runAverySequence("musicPrompt")}>
+        <button onClick={() => runPipSequence("musicPrompt")}>
           <Headphones size={16} />
           Change music
         </button>
@@ -979,7 +978,7 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
         <button
           className="talk-button"
           onClick={() => {
-            if (talkOpen) closeAveryInteraction();
+            if (talkOpen) closePipInteraction();
             else {
               setHasPlayedWorkingStart(true);
               setTalkOpen(true);
@@ -988,14 +987,14 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
           }}
         >
           <MessageCircle size={18} />
-          Talk to Avery
+          Talk to Pip
           {talkOpen ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
         </button>
         {talkOpen && (
           <>
-          <button className="talk-dismiss-layer" onClick={closeAveryInteraction} aria-label="Close Avery conversation" />
+          <button className="talk-dismiss-layer" onClick={closePipInteraction} aria-label="Close Pip conversation" />
           <div className="talk-panel floating-card">
-            <button className="talk-close" onClick={closeAveryInteraction} aria-label="Close Avery options">
+            <button className="talk-close" onClick={closePipInteraction} aria-label="Close Pip options">
               <X size={16} />
             </button>
             {TALK_OPTIONS.map((option) => (
@@ -1019,245 +1018,21 @@ function StudyRoom({ session, initialTheme = "day", onThemeChange, onRestart }) 
   );
 }
 
-function RoomScene({ theme, averyVisualState, onStartingWorkEnded }) {
+function RoomScene({ theme, pipState }) {
   return (
-    <div className="scene" aria-hidden="true">
-      <SceneVideoPlayer
-        theme={theme}
-        visualState={averyVisualState}
-        onStartingWorkEnded={onStartingWorkEnded}
-      />
-      <div className="directional-light" />
-      <div className="window-haze" />
-      <div className="dust-motes">
+    <div className="scene">
+      <div className={`room-backdrop room-backdrop--${theme}`} aria-hidden="true" />
+      <div className="pip-stage">
+        <DeskScene state={pipState} theme={theme} />
+      </div>
+      <div className="directional-light" aria-hidden="true" />
+      <div className="window-haze" aria-hidden="true" />
+      <div className="dust-motes" aria-hidden="true">
         <span /><span /><span /><span /><span />
       </div>
-      <div className="grain" />
-      <div className="room-vignette" />
-      <div className="theme-wash">{theme}</div>
-    </div>
-  );
-}
-
-function SceneVideoPlayer({ theme, visualState, onStartingWorkEnded }) {
-  const prefersReducedMotion = useMemo(
-    () => window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false,
-    []
-  );
-  const mediaForState = (modeTheme, state) => {
-    const media = VIDEO_MEDIA[modeTheme];
-    const fallback = media.fallback || VIDEO_MEDIA.day.fallback;
-    if (state === "workingStart") {
-      return { src: media.workingStart, type: "video", mode: "workingStart", loop: false, fallback, poster: fallback };
-    }
-    if (state === "engaging") {
-      const engagingFallback = media.engagingFallback || fallback;
-      return { src: media.engaging, type: "video", mode: "engaging", loop: true, fallback: engagingFallback, poster: engagingFallback };
-    }
-    return { src: media.workingLoop, type: "video", mode: "workingLoop", loop: true, fallback, poster: fallback };
-  };
-
-  const [currentMedia, setCurrentMedia] = useState(() => mediaForState(theme, visualState));
-  const [incomingMedia, setIncomingMedia] = useState(null);
-  const [isFading, setIsFading] = useState(false);
-  const [poster, setPoster] = useState(() => VIDEO_MEDIA[theme].fallback);
-  const [sceneStatus, setSceneStatus] = useState({
-    loaded: false,
-    failed: false,
-    activeSrc: mediaForState(theme, visualState).src,
-    fallbackSrc: VIDEO_MEDIA[theme].fallback
-  });
-  const [failedSources, setFailedSources] = useState(() => new Set());
-  const currentRef = useRef(currentMedia);
-  const currentVideoRef = useRef(null);
-  const incomingVideoRef = useRef(null);
-  const commitTimerRef = useRef(null);
-
-  const transitionTo = (nextMedia) => {
-    if (!nextMedia?.src || nextMedia.src === currentRef.current?.src) {
-      currentRef.current = nextMedia || currentRef.current;
-      return;
-    }
-
-    if (prefersReducedMotion) {
-      currentRef.current = nextMedia;
-      setCurrentMedia(nextMedia);
-      setIncomingMedia(null);
-      setIsFading(false);
-      setSceneStatus({
-        loaded: nextMedia.type === "image",
-        failed: false,
-        activeSrc: nextMedia.src,
-        fallbackSrc: nextMedia.fallback || nextMedia.poster || VIDEO_MEDIA[theme].fallback
-      });
-      return;
-    }
-
-    setIncomingMedia(nextMedia);
-    setSceneStatus({
-      loaded: nextMedia.type === "image",
-      failed: false,
-      activeSrc: nextMedia.src,
-      fallbackSrc: nextMedia.fallback || nextMedia.poster || VIDEO_MEDIA[theme].fallback
-    });
-    window.requestAnimationFrame(() => setIsFading(true));
-  };
-
-  const commitIncoming = () => {
-    setIncomingMedia((media) => {
-      if (!media) return null;
-      currentRef.current = media;
-      setCurrentMedia(media);
-      return null;
-    });
-    setIsFading(false);
-  };
-
-  useEffect(() => {
-    setPoster(VIDEO_MEDIA[theme].fallback);
-    transitionTo(mediaForState(theme, visualState));
-  }, [theme, visualState]);
-
-  useEffect(() => {
-    const video = currentVideoRef.current;
-    if (!video) return;
-    video.play?.().catch(() => {});
-  }, [currentMedia]);
-
-  useEffect(() => {
-    const video = incomingVideoRef.current;
-    if (!video) return;
-    video.play?.().catch(() => {});
-  }, [incomingMedia]);
-
-  useEffect(() => () => window.clearTimeout(commitTimerRef.current), []);
-
-  useEffect(() => {
-    const onVisibilityChange = () => {
-      const videos = [currentVideoRef.current, incomingVideoRef.current].filter(Boolean);
-      videos.forEach((video) => {
-        if (document.hidden) video.pause();
-        else video.play?.().catch(() => {});
-      });
-    };
-    document.addEventListener("visibilitychange", onVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", onVisibilityChange);
-  }, []);
-
-  const handleEnded = (media) => {
-    if (media.src !== currentRef.current?.src) return;
-    if (media.mode === "workingStart") onStartingWorkEnded?.();
-  };
-
-  const handleError = (media) => {
-    const fallback = media.fallback || VIDEO_MEDIA[theme].fallback;
-    console.warn("Study Double scene media failed:", media.src);
-    setFailedSources((sources) => new Set([...sources, media.src]));
-    setPoster(fallback);
-    setSceneStatus({
-      loaded: false,
-      failed: true,
-      activeSrc: media.src,
-      fallbackSrc: fallback
-    });
-    const fallbackMedia = {
-      src: fallback,
-      type: "image",
-      mode: media.mode,
-      loop: false,
-      fallback,
-      poster: fallback
-    };
-    if (media.src === currentRef.current?.src) {
-      currentRef.current = fallbackMedia;
-      setCurrentMedia(fallbackMedia);
-      setIncomingMedia(null);
-      setIsFading(false);
-    } else {
-      setIncomingMedia(null);
-      setIsFading(false);
-    }
-  };
-
-  const handleLoaded = (media) => {
-    setSceneStatus({
-      loaded: true,
-      failed: false,
-      activeSrc: media.src,
-      fallbackSrc: media.fallback || media.poster || VIDEO_MEDIA[theme].fallback
-    });
-  };
-
-  const renderMedia = (media, className, ref) => {
-    if (!media?.src) return null;
-    const effectiveMedia = failedSources.has(media.src) && media.fallback
-      ? { ...media, src: media.fallback, type: "image", loop: false, poster: media.fallback }
-      : media;
-    if (effectiveMedia.type === "image") {
-      return (
-        <div
-          key={effectiveMedia.src}
-          className={`${className} scene-still`}
-          style={{ "--still-src": `url(${effectiveMedia.src || effectiveMedia.fallback || poster})` }}
-        />
-      );
-    }
-    return (
-      <video
-        key={effectiveMedia.src}
-        ref={ref}
-        className={className}
-        src={effectiveMedia.src}
-        poster={effectiveMedia.poster || poster}
-        muted
-        playsInline
-        preload="metadata"
-        loop={effectiveMedia.loop}
-        autoPlay
-        onLoadedData={() => handleLoaded(effectiveMedia)}
-        onCanPlay={() => handleLoaded(effectiveMedia)}
-        onEnded={() => handleEnded(effectiveMedia)}
-        onError={() => handleError(effectiveMedia)}
-      />
-    );
-  };
-
-  return (
-    <div className="scene-video-player" style={{ "--scene-poster": `url(${poster})` }}>
-      {renderMedia(currentMedia, "scene-video scene-video-current", currentVideoRef)}
-      {incomingMedia && (
-        <>
-          {renderMedia(
-            incomingMedia,
-            `scene-video scene-video-incoming ${isFading ? "is-visible" : ""}`,
-            incomingVideoRef
-          )}
-          <span
-            className="scene-commit-probe"
-            onAnimationEnd={commitIncoming}
-            onTransitionEnd={commitIncoming}
-            ref={() => {
-              window.clearTimeout(commitTimerRef.current);
-              commitTimerRef.current = window.setTimeout(commitIncoming, prefersReducedMotion ? 0 : 950);
-            }}
-          />
-        </>
-      )}
-      <div className="scene-debug-label" aria-hidden="true">
-        <span>{visualState}</span>
-        <span>{sceneStatus.activeSrc}</span>
-        <span>{sceneStatus.fallbackSrc}</span>
-        <span>{sceneStatus.failed ? "failed" : sceneStatus.loaded ? "loaded" : "loading"}</span>
-      </div>
-    </div>
-  );
-}
-
-function AveryPortrait() {
-  return (
-    <div className="portrait">
-      <div />
-      <span />
+      <div className="grain" aria-hidden="true" />
+      <div className="room-vignette" aria-hidden="true" />
+      <div className="theme-wash" aria-hidden="true">{theme}</div>
     </div>
   );
 }
@@ -1269,7 +1044,7 @@ function SummaryModal({ summary, onRestart }) {
         <TimerReset size={30} />
         <h2>Session complete</h2>
         <p>You studied for {summary.studied} minutes.</p>
-        <p>Avery completed {summary.avery}% of her task.</p>
+        <p>Pip finished {summary.pip}% of his task.</p>
         <strong>Today's total: {summary.total} minutes.</strong>
         <button onClick={onRestart}>Start another session</button>
       </section>

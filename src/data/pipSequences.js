@@ -1,4 +1,4 @@
-export const AVERY_MOTIVATION_LINES = [
+export const PIP_MOTIVATION_LINES = [
   "You do not need to feel ready. Just come back to the next small bit.",
   "You are allowed to be tired and still do one kind, useful thing.",
   "We are not trying to rescue the whole day. We are just doing the next 10 minutes.",
@@ -26,11 +26,11 @@ export const AVERY_MOTIVATION_LINES = [
   "Let's make the next bit so clear your tired brain can follow it."
 ];
 
-export const AVERY_SEQUENCES = {
+export const PIP_SEQUENCES = {
   sessionStart: {
     id: "sessionStart",
     trigger: "sessionStart",
-    averyLine: "I'm settling in now. You do not need to feel ready. Just come back to the next small bit.",
+    pipLine: "I'm settling in now. You do not need to feel ready. Just come back to the next small bit.",
     visualState: "workingStart",
     waitsForAnswer: false,
     options: [],
@@ -42,7 +42,7 @@ export const AVERY_SEQUENCES = {
   readyToStart: {
     id: "readyToStart",
     trigger: "I'm ready to start",
-    averyLine: "Okay, I'm starting too. Let's just get the first small bit done.",
+    pipLine: "Okay, I'm starting too. Let's just get the first small bit done.",
     visualState: "engaging",
     waitsForAnswer: false,
     options: [],
@@ -54,7 +54,7 @@ export const AVERY_SEQUENCES = {
   musicPrompt: {
     id: "musicPrompt",
     trigger: "Change the music",
-    averyLine: "Should I play some music while we study?",
+    pipLine: "Should I play some music while we study?",
     visualState: "engaging",
     waitsForAnswer: false,
     options: [],
@@ -72,7 +72,7 @@ export const AVERY_SEQUENCES = {
   breakPrompt: {
     id: "breakPrompt",
     trigger: "I want to take a break",
-    averyLine: "Can you do 10 more minutes with me first? I'm just getting into it.",
+    pipLine: "Can you do 10 more minutes with me first? I'm just getting into it.",
     visualState: "engaging",
     waitsForAnswer: true,
     options: [
@@ -92,7 +92,7 @@ export const AVERY_SEQUENCES = {
   backFromBreak: {
     id: "backFromBreak",
     trigger: "I'm back",
-    averyLine: "Good, I'm back too. Let's ease in. Let's prove to your brain that starting again is possible.",
+    pipLine: "Good, I'm back too. Let's ease in. Let's prove to your brain that starting again is possible.",
     visualState: "engaging",
     waitsForAnswer: false,
     options: [],
@@ -104,7 +104,7 @@ export const AVERY_SEQUENCES = {
   strugglingToFocus: {
     id: "strugglingToFocus",
     trigger: "I'm struggling to focus",
-    averyLine: "Same. Let's make this smaller until it becomes possible. Pick one tiny thing and do just that.",
+    pipLine: "Same. Let's make this smaller until it becomes possible. Pick one tiny thing and do just that.",
     visualState: "engaging",
     waitsForAnswer: true,
     options: [
@@ -123,6 +123,6 @@ export const AVERY_SEQUENCES = {
   }
 };
 
-export function getAverySequence(sequenceId) {
-  return AVERY_SEQUENCES[sequenceId] ?? null;
+export function getPipSequence(sequenceId) {
+  return PIP_SEQUENCES[sequenceId] ?? null;
 }

@@ -1,0 +1,201 @@
+/* Pip at his desk. CSS-only animation, no library (as in Big Picture Planner).
+   Pip's own face animations below are copied from big-picture-planner
+   src/index.css at 814c68e8 (blink, thinking dots, screen glow, happy pop). */
+
+.pip-scene {
+  --ds-desk-top: #b98b5e;
+  --ds-desk-front: #9b6f47;
+  --ds-desk-edge: #7a5535;
+  --ds-leg: #6f4d31;
+  --ds-page: #fbf6e9;
+  --ds-page-line: #cdbf9c;
+  --ds-spine: #a89572;
+  --ds-lamp: #5b5b66;
+  --ds-lamp-shade: #e7b94f;
+  --ds-bulb: #fff3c4;
+  --ds-mug: #f4efe6;
+  --ds-mug-rim: #d9d0c0;
+  --ds-steam: rgba(255, 255, 255, 0.7);
+  --ds-pen: #2d2a35;
+  --ds-arm: #7c5cfc;
+  --ds-tint: rgba(255, 224, 170, 0.06);
+  --ds-glow: 0;
+  --ds-contact: rgba(40, 24, 10, 0.28);
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.pip-scene--evening {
+  --ds-desk-top: #6a4a33;
+  --ds-desk-front: #53382a;
+  --ds-desk-edge: #3d291e;
+  --ds-leg: #3a281d;
+  --ds-page: #ecdcb2;
+  --ds-page-line: #a8956a;
+  --ds-spine: #7d6c4a;
+  --ds-lamp: #3d3d48;
+  --ds-lamp-shade: #f2a93b;
+  --ds-bulb: #fff0b8;
+  --ds-mug: #d8cdb8;
+  --ds-mug-rim: #b3a68e;
+  --ds-steam: rgba(255, 238, 210, 0.6);
+  --ds-tint: rgba(255, 150, 60, 0.13);
+  --ds-glow: 0.9;
+  --ds-contact: rgba(0, 0, 0, 0.42);
+}
+
+.pip-scene .ds-ground-shadow { opacity: 0.9; }
+.pip-scene--evening .ds-ground-shadow { opacity: 1; }
+.pip-scene .ds-lamp-glow { opacity: var(--ds-glow); }
+.pip-scene .ds-contact { fill: var(--ds-contact); }
+.pip-scene .ds-tint { fill: var(--ds-tint); pointer-events: none; }
+
+.pip-scene .ds-desk-top { fill: var(--ds-desk-top); }
+.pip-scene .ds-desk-front { fill: var(--ds-desk-front); }
+.pip-scene .ds-desk-edge { fill: var(--ds-desk-edge); opacity: 0.55; }
+.pip-scene .ds-desk-leg { fill: var(--ds-leg); }
+
+.pip-scene .ds-lamp-base { fill: var(--ds-lamp); }
+.pip-scene .ds-lamp-arm { stroke: var(--ds-lamp); stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; }
+.pip-scene .ds-lamp-shade { fill: var(--ds-lamp-shade); }
+.pip-scene .ds-lamp-bulb { fill: var(--ds-bulb); opacity: 0.55; }
+.pip-scene--evening .ds-lamp-bulb { opacity: 1; }
+
+.pip-scene .ds-page { fill: var(--ds-page); }
+.pip-scene .ds-page-lines { stroke: var(--ds-page-line); stroke-width: 1.2; stroke-linecap: round; fill: none; }
+.pip-scene .ds-spine { stroke: var(--ds-spine); stroke-width: 1.6; }
+.pip-scene .ds-turn-page { fill: var(--ds-page); stroke: var(--ds-page-line); stroke-width: 0.8; opacity: 0; transform-origin: 200px 200px; }
+
+.pip-scene .ds-pen-rest { stroke: var(--ds-pen); stroke-width: 3; stroke-linecap: round; }
+.pip-scene .ds-writer { opacity: 0; }
+.pip-scene .ds-arm { stroke: var(--ds-arm); stroke-width: 9; stroke-linecap: round; }
+.pip-scene .ds-pen { stroke: var(--ds-pen); stroke-width: 3; stroke-linecap: round; }
+
+.pip-scene .ds-mug-body { fill: var(--ds-mug); }
+.pip-scene .ds-mug-rim { fill: var(--ds-mug-rim); }
+.pip-scene .ds-mug-handle { stroke: var(--ds-mug); stroke-width: 4; stroke-linecap: round; }
+.pip-scene .ds-steam { stroke: var(--ds-steam); stroke-width: 2.4; stroke-linecap: round; opacity: 0.55; }
+
+.pip-scene .ds-pip { transform-origin: 200px 198px; }
+.pip-scene .ds-pip svg { overflow: visible; }
+
+/* State: writing. Arm holds the pen on the page, pen moves. */
+.pip-scene--writing .ds-writer { opacity: 1; animation: ds-write 1.6s ease-in-out infinite; transform-origin: 246px 150px; }
+.pip-scene--writing .ds-pen-rest { opacity: 0; }
+
+/* State: reading. Slow blink, a gentle lean over the book, a page turn about every 20 s. */
+.pip-scene--reading .ds-pip { animation: ds-read-lean 9s ease-in-out infinite alternate; }
+.pip-scene--reading .companion-eye { animation-duration: 8.5s; }
+.pip-scene--reading .ds-turn-page { animation: ds-page-turn 20s linear infinite; }
+
+/* State: settling. Props are put down, then everything rests. */
+.pip-scene--settling .ds-book { animation: ds-put-down 1.4s ease-out both; }
+.pip-scene--settling .ds-mug { animation: ds-put-down 1.4s 0.5s ease-out both; }
+.pip-scene--settling .ds-pen-rest { animation: ds-put-down 1.2s 0.9s ease-out both; }
+.pip-scene--settling .ds-lamp { animation: ds-put-down 1.2s 0.2s ease-out both; }
+
+/* State: engaging. Pip turns towards you; the happy face pops (BPP). */
+.pip-scene--engaging .ds-pip { animation: ds-turn-to-you 0.5s ease-out both; }
+
+/* State: break. Pip stretches, then sips from the mug. */
+.pip-scene--break .ds-pip svg rect:nth-of-type(1),
+.pip-scene--break .ds-pip svg rect:nth-of-type(2) {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ds-stretch 6s ease-in-out infinite;
+}
+.pip-scene--break .ds-mug { animation: ds-sip 6s ease-in-out infinite; }
+
+/* Steam is ambient in every state. */
+.pip-scene .ds-steam-1 { animation: ds-steam 4.5s ease-in-out infinite; }
+.pip-scene .ds-steam-2 { animation: ds-steam 4.5s 1.4s ease-in-out infinite; }
+
+@keyframes ds-write {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(-3px, 1px); }
+  50% { transform: translate(2px, -1px); }
+  75% { transform: translate(-2px, 1px); }
+}
+@keyframes ds-read-lean {
+  from { transform: rotate(-0.8deg) translateY(0); }
+  to { transform: rotate(1.4deg) translateY(2px); }
+}
+@keyframes ds-page-turn {
+  0%, 88% { opacity: 0; transform: scaleX(1); }
+  89% { opacity: 1; transform: scaleX(1); }
+  96% { opacity: 1; transform: scaleX(-1); }
+  97%, 100% { opacity: 0; transform: scaleX(-1); }
+}
+@keyframes ds-put-down {
+  from { opacity: 0; transform: translateY(-14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes ds-turn-to-you {
+  from { transform: rotate(-5deg) translateX(-4px); }
+  to { transform: rotate(0deg) translateX(0); }
+}
+@keyframes ds-stretch {
+  0%, 12%, 62%, 100% { transform: translateY(0); }
+  30%, 48% { transform: translateY(-30px); }
+}
+@keyframes ds-sip {
+  0%, 62% { transform: translate(0, 0); }
+  74%, 86% { transform: translate(-52px, -30px) rotate(-14deg); }
+  100% { transform: translate(0, 0); }
+}
+@keyframes ds-steam {
+  0%, 100% { opacity: 0.15; transform: translateY(2px); }
+  50% { opacity: 0.7; transform: translateY(-4px); }
+}
+
+/* Pip's face. Copied from big-picture-planner src/index.css (814c68e8). */
+@keyframes companion-blink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  93% { transform: scaleY(0.12); }
+}
+.companion-avatar--idle .companion-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: companion-blink 4.6s ease-in-out infinite;
+}
+@keyframes companion-pulse-dot {
+  0%, 70%, 100% { opacity: 0.35; transform: translateY(0); }
+  35% { opacity: 1; transform: translateY(-3px); }
+}
+.companion-avatar--thinking .companion-dot {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: companion-pulse-dot 1.1s ease-in-out infinite;
+}
+.companion-avatar--thinking .companion-dot-2 { animation-delay: 0.15s; }
+.companion-avatar--thinking .companion-dot-3 { animation-delay: 0.3s; }
+@keyframes companion-screen-glow {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+.companion-avatar--thinking .companion-screen {
+  animation: companion-screen-glow 1.4s ease-in-out infinite;
+}
+@keyframes companion-happy-pop {
+  0% { transform: scale(0.85); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+.companion-avatar--happy .companion-face-happy {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: companion-happy-pop 380ms ease;
+}
+
+/* Reduced motion: still frames only. Nothing loops, nothing runs. */
+@media (prefers-reduced-motion: reduce) {
+  .pip-scene,
+  .pip-scene *,
+  .pip-scene *::before,
+  .pip-scene *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
