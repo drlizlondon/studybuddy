@@ -1,8 +1,9 @@
 import React, { useMemo } from "react";
 import { renderCompanionAvatarSvg } from "./avatarMarkup.js";
+import { PIP_STANDING_DATA_URI, PIP_WORKING_DATA_URI } from "./pipAssets.js";
 import "./pip.css";
 
-// The five things Pip does at his desk, and the BPP face each one wears.
+// The five things Pip does at his desk, and the face each one wears.
 export const PIP_STATES = ["settling", "reading", "writing", "engaging", "break"];
 
 const FACE = {
@@ -21,14 +22,100 @@ const STATE_LABEL = {
   break: "taking a break"
 };
 
-// The shared avatar is rendered as its own markup string. The scene is the one
-// labelled graphic, so the nested copy is hidden from assistive tech.
-const avatarFor = (face) =>
-  renderCompanionAvatarSvg(face, 120).replace(/ role="img" aria-label="[^"]*"/, ' aria-hidden="true"');
+function AnimatedFace({ face, cx, cy, scale }) {
+  const isThinking = face === "thinking";
+  const isHappy = face === "happy";
+
+  return (
+    <g
+      className={`pip-live-face pip-live-face--${face}`}
+      transform={`translate(${cx} ${cy}) scale(${scale})`}
+      aria-hidden="true"
+    >
+      {/* Soft screen surface glow */}
+      <rect
+        x="-54"
+        y="-48"
+        width="108"
+        height="92"
+        rx="26"
+        fill="rgba(243, 238, 255, 0.45)"
+        className="pip-screen-sheen"
+      />
+
+      {/* Cheeks blush */}
+      <ellipse className="pip-blush pip-blush-left" cx="-32" cy="14" rx="7" ry="3.5" fill="#FFA5C7" opacity="0.45" />
+      <ellipse className="pip-blush pip-blush-right" cx="32" cy="14" rx="7" ry="3.5" fill="#FFA5C7" opacity="0.45" />
+
+      {/* Eyes */}
+      {isHappy ? (
+        <g className="pip-eyes-happy">
+          <path d="M-29 -6 Q-22 -17 -15 -6" stroke="#24143D" strokeWidth="3.6" fill="none" strokeLinecap="round" />
+          <path d="M15 -6 Q22 -17 29 -6" stroke="#24143D" strokeWidth="3.6" fill="none" strokeLinecap="round" />
+        </g>
+      ) : isThinking ? (
+        <g className="pip-eyes-thinking">
+          <g className="pip-eye pip-eye-left pip-eye--focused">
+            <circle cx="-22" cy="-3" r="7.5" fill="#24143D" />
+            <circle cx="-20" cy="-4" r="2.2" fill="#FFFFFF" opacity="0.9" />
+            <path d="M-28 -13 L-15 -10" stroke="#24143D" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+          <g className="pip-eye pip-eye-right pip-eye--focused">
+            <circle cx="22" cy="-3" r="7.5" fill="#24143D" />
+            <circle cx="20" cy="-4" r="2.2" fill="#FFFFFF" opacity="0.9" />
+            <path d="M28 -13 L15 -10" stroke="#24143D" strokeWidth="2.4" strokeLinecap="round" />
+          </g>
+        </g>
+      ) : (
+        <g className="pip-eyes-idle">
+          <g className="pip-eye pip-eye-left">
+            <circle cx="-22" cy="-6" r="8" fill="#24143D" />
+            <circle cx="-20" cy="-8" r="2.8" fill="#FFFFFF" opacity="0.9" />
+          </g>
+          <g className="pip-eye pip-eye-right">
+            <circle cx="22" cy="-6" r="8" fill="#24143D" />
+            <circle cx="24" cy="-8" r="2.8" fill="#FFFFFF" opacity="0.9" />
+          </g>
+        </g>
+      )}
+
+      {/* Mouth */}
+      {isHappy ? (
+        <path
+          className="pip-mouth pip-mouth--happy"
+          d="M-13 11 Q0 24 13 11 Q0 16 -13 11"
+          fill="#7C5CFC"
+          stroke="#24143D"
+          strokeWidth="2.8"
+          strokeLinejoin="round"
+        />
+      ) : isThinking ? (
+        <path
+          className="pip-mouth pip-mouth--concentrated"
+          d="M-8 15 Q0 14 8 15"
+          stroke="#24143D"
+          strokeWidth="2.4"
+          fill="none"
+          strokeLinecap="round"
+        />
+      ) : (
+        <path
+          className="pip-mouth pip-mouth--idle"
+          d="M-10 14 Q0 19 10 14"
+          stroke="#24143D"
+          strokeWidth="2.6"
+          fill="none"
+          strokeLinecap="round"
+        />
+      )}
+    </g>
+  );
+}
 
 export function DeskScene({ state = "reading", theme = "day" }) {
   const safeState = PIP_STATES.includes(state) ? state : "reading";
-  const avatar = useMemo(() => avatarFor(FACE[safeState]), [safeState]);
+  const face = FACE[safeState];
+  const isWorking = safeState === "reading" || safeState === "writing";
 
   return (
     <svg
@@ -52,17 +139,13 @@ export function DeskScene({ state = "reading", theme = "day" }) {
         </radialGradient>
       </defs>
 
-      {/* Soft ground shadow under the desk and its props. */}
+      {/* Soft ground shadow under the desk. */}
       <ellipse className="ds-ground-shadow" cx="200" cy="268" rx="190" ry="14" fill="url(#pip-ground-shadow)" />
 
       {/* Lamp glow sits behind everything; it only shows in the evening. */}
       <circle className="ds-lamp-glow" cx="96" cy="140" r="104" fill="url(#pip-lamp-glow)" />
 
-      <g className="ds-pip">
-        <g transform="translate(140 92)" dangerouslySetInnerHTML={{ __html: avatar }} />
-      </g>
-
-      {/* Desk */}
+      {/* Desk and lamp props */}
       <g className="ds-desk">
         <rect className="ds-desk-leg" x="40" y="250" width="14" height="18" rx="3" />
         <rect className="ds-desk-leg" x="346" y="250" width="14" height="18" rx="3" />
@@ -71,12 +154,12 @@ export function DeskScene({ state = "reading", theme = "day" }) {
         <rect className="ds-desk-edge" x="20" y="206" width="360" height="3" rx="1.5" />
       </g>
 
-      {/* Contact shadows for each prop. */}
+      {/* Contact shadows */}
       <ellipse className="ds-contact" cx="200" cy="208" rx="62" ry="4" />
       <ellipse className="ds-contact" cx="64" cy="204" rx="26" ry="3.5" />
       <ellipse className="ds-contact" cx="306" cy="204" rx="22" ry="3.5" />
 
-      {/* Lamp */}
+      {/* Lamp on the desk */}
       <g className="ds-lamp">
         <ellipse className="ds-lamp-base" cx="64" cy="201" rx="22" ry="5" />
         <path className="ds-lamp-arm" d="M64 200 L58 154 L92 124" fill="none" />
@@ -84,30 +167,45 @@ export function DeskScene({ state = "reading", theme = "day" }) {
         <circle className="ds-lamp-bulb" cx="95" cy="138" r="6" />
       </g>
 
-      {/* Book, with a page that turns every ~20 s while Pip reads. */}
-      <g className="ds-book">
-        <path className="ds-page ds-page-left" d="M146 204 L200 208 L200 194 L150 190 Z" />
-        <path className="ds-page ds-page-right" d="M200 208 L254 204 L250 190 L200 194 Z" />
-        <path className="ds-page-lines" d="M156 196 L194 199 M156 201 L194 204 M206 199 L244 196 M206 204 L244 201" />
-        <path className="ds-turn-page" d="M200 208 L254 204 L250 190 L200 194 Z" />
-        <path className="ds-spine" d="M200 194 L200 208" />
+      {/* Pip 3D character with approved mini arms and responsive animated screen face */}
+      <g className="ds-pip pip-character">
+        {isWorking ? (
+          <g className="pip-pose pip-pose--working">
+            <image
+              className="pip-body pip-body--working"
+              href={PIP_WORKING_DATA_URI}
+              x="95"
+              y="49"
+              width="270"
+              height="157"
+            />
+            <AnimatedFace face={face} cx={200} cy={93} scale={0.4} />
+          </g>
+        ) : (
+          <g className="pip-pose pip-pose--standing">
+            <image
+              className="pip-body pip-body--standing"
+              href={PIP_STANDING_DATA_URI}
+              x="134"
+              y="48"
+              width="118"
+              height="158"
+            />
+            <AnimatedFace face={face} cx={200} cy={102} scale={0.4} />
+          </g>
+        )}
       </g>
 
-      {/* Pen resting on the desk; in `writing` Pip's arm holds it on the page. */}
-      <path className="ds-pen-rest" d="M262 203 L284 199" />
-      <g className="ds-writer">
-        <path className="ds-arm" d="M246 150 Q268 178 232 194" fill="none" />
-        <path className="ds-pen" d="M232 194 L222 203" />
-      </g>
-
-      {/* Mug and steam */}
-      <g className="ds-mug">
-        <path className="ds-steam ds-steam-1" d="M300 170 Q296 162 301 156" fill="none" />
-        <path className="ds-steam ds-steam-2" d="M312 170 Q308 160 314 154" fill="none" />
-        <rect className="ds-mug-body" x="290" y="174" width="32" height="28" rx="6" />
-        <path className="ds-mug-handle" d="M322 180 Q336 182 322 194" fill="none" />
-        <rect className="ds-mug-rim" x="290" y="174" width="32" height="5" rx="2.5" />
-      </g>
+      {/* Mug and steam for standing state */}
+      {!isWorking && (
+        <g className="ds-mug">
+          <path className="ds-steam ds-steam-1" d="M300 170 Q296 162 301 156" fill="none" />
+          <path className="ds-steam ds-steam-2" d="M312 170 Q308 160 314 154" fill="none" />
+          <rect className="ds-mug-body" x="290" y="174" width="32" height="28" rx="6" />
+          <path className="ds-mug-handle" d="M322 180 Q336 182 322 194" fill="none" />
+          <rect className="ds-mug-rim" x="290" y="174" width="32" height="5" rx="2.5" />
+        </g>
+      )}
     </svg>
   );
 }
@@ -115,5 +213,12 @@ export function DeskScene({ state = "reading", theme = "day" }) {
 // Pip's face on its own (used beside his speech). Decorative: the message text carries the meaning.
 export function PipFace({ state = "reading" }) {
   const face = FACE[state] ?? "idle";
-  return <span className="pip-face" dangerouslySetInnerHTML={{ __html: renderCompanionAvatarSvg(face, 36).replace(/ role="img" aria-label="[^"]*"/, ' aria-hidden="true"') }} />;
+  return (
+    <span
+      className="pip-face"
+      dangerouslySetInnerHTML={{
+        __html: renderCompanionAvatarSvg(face, 36).replace(/ role="img" aria-label="[^"]*"/, ' aria-hidden="true"')
+      }}
+    />
+  );
 }

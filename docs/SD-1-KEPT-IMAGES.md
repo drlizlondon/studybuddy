@@ -6,5 +6,7 @@ Every image file left under `public/` after SD-1b, each opened and looked at bef
 |---|---|
 | public/images/study-room-day.png | checked: no person (empty desk, open notebook, mug, books, window onto hills). Not used by the app. |
 | public/images/study-room-evening.png | checked: no person (same desk at dusk, lamp on). Not used by the app. |
+| public/images/pip/pip-standing.webp | checked: no person (Pip 3D silicone character standing with mini arms, blanked screen). |
+| public/images/pip/pip-working.webp | checked: no person (Pip 3D silicone character working at laptop with mini arms and smiley mug). |
 
 Deleted because they contain a person: `avery-*.png` (5), `master-day-frame.png`, `master-evening-frame.png`, `evening-engaging-still.png`, `scenes/scene-01.png` to `scene-30.png` (all 30 show the same woman), and all of `public/video/`.

@@ -7,17 +7,12 @@
   --ds-desk-front: #9b6f47;
   --ds-desk-edge: #7a5535;
   --ds-leg: #6f4d31;
-  --ds-page: #fbf6e9;
-  --ds-page-line: #cdbf9c;
-  --ds-spine: #a89572;
   --ds-lamp: #5b5b66;
   --ds-lamp-shade: #e7b94f;
   --ds-bulb: #fff3c4;
   --ds-mug: #f4efe6;
   --ds-mug-rim: #d9d0c0;
   --ds-steam: rgba(255, 255, 255, 0.7);
-  --ds-pen: #2d2a35;
-  --ds-arm: #7c5cfc;
   --ds-glow: 0;
   --ds-contact: rgba(40, 24, 10, 0.28);
   display: block;
@@ -31,9 +26,6 @@
   --ds-desk-front: #53382a;
   --ds-desk-edge: #3d291e;
   --ds-leg: #3a281d;
-  --ds-page: #ecdcb2;
-  --ds-page-line: #a8956a;
-  --ds-spine: #7d6c4a;
   --ds-lamp: #3d3d48;
   --ds-lamp-shade: #f2a93b;
   --ds-bulb: #fff0b8;
@@ -60,94 +52,118 @@
 .pip-scene .ds-lamp-bulb { fill: var(--ds-bulb); opacity: 0.55; }
 .pip-scene--evening .ds-lamp-bulb { opacity: 1; }
 
-.pip-scene .ds-page { fill: var(--ds-page); }
-.pip-scene .ds-page-lines { stroke: var(--ds-page-line); stroke-width: 1.2; stroke-linecap: round; fill: none; }
-.pip-scene .ds-spine { stroke: var(--ds-spine); stroke-width: 1.6; }
-.pip-scene .ds-turn-page { fill: var(--ds-page); stroke: var(--ds-page-line); stroke-width: 0.8; opacity: 0; transform-origin: 200px 200px; }
-
-.pip-scene .ds-pen-rest { stroke: var(--ds-pen); stroke-width: 3; stroke-linecap: round; }
-.pip-scene .ds-writer { opacity: 0; }
-.pip-scene .ds-arm { stroke: var(--ds-arm); stroke-width: 9; stroke-linecap: round; }
-.pip-scene .ds-pen { stroke: var(--ds-pen); stroke-width: 3; stroke-linecap: round; }
-
 .pip-scene .ds-mug-body { fill: var(--ds-mug); }
 .pip-scene .ds-mug-rim { fill: var(--ds-mug-rim); }
 .pip-scene .ds-mug-handle { stroke: var(--ds-mug); stroke-width: 4; stroke-linecap: round; }
 .pip-scene .ds-steam { stroke: var(--ds-steam); stroke-width: 2.4; stroke-linecap: round; opacity: 0.55; }
 
-.pip-scene .ds-pip { transform-origin: 200px 198px; }
-.pip-scene .ds-pip svg { overflow: visible; }
-
-/* State: writing. Arm holds the pen on the page, pen moves. */
-.pip-scene--writing .ds-writer { opacity: 1; animation: ds-write 1.6s ease-in-out infinite; transform-origin: 246px 150px; }
-.pip-scene--writing .ds-pen-rest { opacity: 0; }
-
-/* State: reading. Slow blink, a gentle lean over the book, a page turn about every 20 s. */
-.pip-scene--reading .ds-pip { animation: ds-read-lean 9s ease-in-out infinite alternate; }
-.pip-scene--reading .companion-eye { animation-duration: 8.5s; }
-.pip-scene--reading .ds-turn-page { animation: ds-page-turn 20s linear infinite; }
-
-/* State: settling. Props are put down, then everything rests. */
-.pip-scene--settling .ds-book { animation: ds-put-down 1.4s ease-out both; }
-.pip-scene--settling .ds-mug { animation: ds-put-down 1.4s 0.5s ease-out both; }
-.pip-scene--settling .ds-pen-rest { animation: ds-put-down 1.2s 0.9s ease-out both; }
-.pip-scene--settling .ds-lamp { animation: ds-put-down 1.2s 0.2s ease-out both; }
-
-/* State: engaging. Pip turns towards you; the happy face pops (BPP). */
-.pip-scene--engaging .ds-pip { animation: ds-turn-to-you 0.5s ease-out both; }
-
-/* State: break. Pip stretches, then sips from the mug. */
-.pip-scene--break .ds-pip svg rect:nth-of-type(1),
-.pip-scene--break .ds-pip svg rect:nth-of-type(2) {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ds-stretch 6s ease-in-out infinite;
+/* Gentle breathing float for Pip */
+.pip-character {
+  transform-origin: 200px 190px;
+  animation: pip-breathe 4.5s ease-in-out infinite;
 }
-.pip-scene--break .ds-mug { animation: ds-sip 6s ease-in-out infinite; }
 
-/* Steam is ambient in every state. */
+/* State: writing. Pip is focused typing at his laptop */
+.pip-scene--writing .pip-body--working {
+  animation: pip-type 1.4s ease-in-out infinite;
+  transform-origin: 200px 180px;
+}
+
+/* State: reading. Slow blink, gentle eye movement reading the screen */
+.pip-scene--reading .pip-eyes-idle {
+  animation: pip-read-glance 6s ease-in-out infinite;
+}
+
+/* State: settling. Settles in */
+.pip-scene--settling .pip-pose--standing {
+  animation: pip-settle 1.2s ease-out both;
+}
+
+/* State: engaging. Pip turns towards you with bright expression */
+.pip-scene--engaging .pip-pose--standing {
+  animation: pip-turn-to-you 0.45s ease-out both;
+}
+
+/* State: break. Pip relaxes at desk */
+.pip-scene--break .pip-pose--standing {
+  animation: pip-break-relax 5s ease-in-out infinite;
+}
+
+/* Steam is ambient in every state */
 .pip-scene .ds-steam-1 { animation: ds-steam 4.5s ease-in-out infinite; }
 .pip-scene .ds-steam-2 { animation: ds-steam 4.5s 1.4s ease-in-out infinite; }
 
-@keyframes ds-write {
+/* Live animated SVG eyes & face */
+.pip-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pip-blink 4.6s ease-in-out infinite;
+}
+
+.pip-screen-sheen {
+  animation: pip-screen-glow 3.5s ease-in-out infinite;
+}
+
+.pip-live-face--happy {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: pip-happy-pop 380ms ease;
+}
+
+@keyframes pip-breathe {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.8px); }
+}
+
+@keyframes pip-blink {
+  0%, 88%, 100% { transform: scaleY(1); }
+  92% { transform: scaleY(0.08); }
+}
+
+@keyframes pip-type {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-0.8px) rotate(-0.25deg); }
+  75% { transform: translateY(0.5px) rotate(0.25deg); }
+}
+
+@keyframes pip-read-glance {
   0%, 100% { transform: translate(0, 0); }
-  25% { transform: translate(-3px, 1px); }
-  50% { transform: translate(2px, -1px); }
-  75% { transform: translate(-2px, 1px); }
+  30% { transform: translate(-2px, 1px); }
+  70% { transform: translate(2px, 1px); }
 }
-@keyframes ds-read-lean {
-  from { transform: rotate(-0.8deg) translateY(0); }
-  to { transform: rotate(1.4deg) translateY(2px); }
-}
-@keyframes ds-page-turn {
-  0%, 88% { opacity: 0; transform: scaleX(1); }
-  89% { opacity: 1; transform: scaleX(1); }
-  96% { opacity: 1; transform: scaleX(-1); }
-  97%, 100% { opacity: 0; transform: scaleX(-1); }
-}
-@keyframes ds-put-down {
-  from { opacity: 0; transform: translateY(-14px); }
+
+@keyframes pip-settle {
+  from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
 }
-@keyframes ds-turn-to-you {
-  from { transform: rotate(-5deg) translateX(-4px); }
-  to { transform: rotate(0deg) translateX(0); }
+
+@keyframes pip-turn-to-you {
+  from { transform: translateY(2px) scale(0.98); }
+  to { transform: translateY(0) scale(1); }
 }
-@keyframes ds-stretch {
-  0%, 12%, 62%, 100% { transform: translateY(0); }
-  30%, 48% { transform: translateY(-30px); }
+
+@keyframes pip-break-relax {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(1.5px); }
 }
-@keyframes ds-sip {
-  0%, 62% { transform: translate(0, 0); }
-  74%, 86% { transform: translate(-52px, -30px) rotate(-14deg); }
-  100% { transform: translate(0, 0); }
+
+@keyframes pip-screen-glow {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.65; }
 }
+
+@keyframes pip-happy-pop {
+  0% { transform: scale(0.9); }
+  60% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
 @keyframes ds-steam {
   0%, 100% { opacity: 0.15; transform: translateY(2px); }
   50% { opacity: 0.7; transform: translateY(-4px); }
 }
 
-/* Pip's face. Copied from big-picture-planner src/index.css (814c68e8). */
+/* Pip speech avatar faces. Copied from big-picture-planner src/index.css (814c68e8). */
 @keyframes companion-blink {
   0%, 88%, 100% { transform: scaleY(1); }
   93% { transform: scaleY(0.12); }

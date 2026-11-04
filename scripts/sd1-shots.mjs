@@ -7,9 +7,9 @@ const baseUrl = process.argv[2] || "http://127.0.0.1:4173/studybuddy/";
 const outDir = new URL("../docs/sd1-shots/", import.meta.url).pathname;
 mkdirSync(outDir, { recursive: true });
 
-const browser = await chromium.launch({
-  executablePath: process.env.PW_CHROMIUM || "/opt/pw-browsers/chromium"
-});
+const browser = await chromium.launch(
+  process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}
+);
 
 async function shoot({ name, width, height, evening, reduced, room }) {
   const context = await browser.newContext({
