@@ -11,7 +11,7 @@ export const ROOMS = [
     day: "/images/rooms/alps-day.webp",
     night: "/images/rooms/alps-night.webp",
     pip: { x: 50, y: 52, scale: 1 },
-    images: false,
+    images: true,
     placeholder: {
       day:
         "radial-gradient(circle at 80% 14%, rgba(255, 251, 226, 0.95), rgba(255, 251, 226, 0) 20%), " +
@@ -29,7 +29,7 @@ export const ROOMS = [
     day: "/images/rooms/country-day.webp",
     night: "/images/rooms/country-night.webp",
     pip: { x: 50, y: 52, scale: 1 },
-    images: false,
+    images: true,
     placeholder: {
       day:
         "radial-gradient(circle at 70% 18%, rgba(255, 244, 214, 0.7), rgba(255, 244, 214, 0) 34%), " +
@@ -45,7 +45,7 @@ export const ROOMS = [
     day: "/images/rooms/office-day.webp",
     night: "/images/rooms/office-night.webp",
     pip: { x: 50, y: 52, scale: 1 },
-    images: false,
+    images: true,
     placeholder: {
       day:
         "repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.18) 0 2px, rgba(255, 255, 255, 0) 2px 72px), " +

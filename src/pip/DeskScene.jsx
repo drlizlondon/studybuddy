@@ -179,7 +179,7 @@ export function DeskScene({ state = "reading", theme = "day" }) {
               width="270"
               height="157"
             />
-            <AnimatedFace face={face} cx={200} cy={93} scale={0.4} />
+            <AnimatedFace face={face} cx={200} cy={104} scale={0.46} />
           </g>
         ) : (
           <g className="pip-pose pip-pose--standing">
@@ -191,7 +191,7 @@ export function DeskScene({ state = "reading", theme = "day" }) {
               width="118"
               height="158"
             />
-            <AnimatedFace face={face} cx={200} cy={102} scale={0.4} />
+            <AnimatedFace face={face} cx={200} cy={108} scale={0.46} />
           </g>
         )}
       </g>

@@ -103,20 +103,35 @@ function saveRoomId(id) {
   }
 }
 
+const loadedRoomImages = new Set();
+
 // The view behind Pip. Uses the room's image once it is known to exist, and its CSS-gradient
 // placeholder otherwise (no image request at all while room.images is false).
 function RoomBackdrop({ room, theme }) {
   const variant = theme === "evening" ? "night" : "day";
   const wanted = room.images ? assetUrl(room[variant]) : null;
-  const [loaded, setLoaded] = useState(null);
+  const [loaded, setLoaded] = useState(() => (wanted && loadedRoomImages.has(wanted) ? wanted : null));
 
   useEffect(() => {
-    setLoaded(null);
-    if (!wanted) return undefined;
+    if (!wanted) {
+      setLoaded(null);
+      return undefined;
+    }
+    if (loadedRoomImages.has(wanted)) {
+      setLoaded(wanted);
+      return undefined;
+    }
     let cancelled = false;
     const probe = new Image();
-    probe.onload = () => !cancelled && setLoaded(wanted);
-    probe.onerror = () => !cancelled && setLoaded(null);
+    probe.onload = () => {
+      if (cancelled) return;
+      loadedRoomImages.add(wanted);
+      setLoaded(wanted);
+    };
+    probe.onerror = () => {
+      if (cancelled) return;
+      setLoaded(null);
+    };
     probe.src = wanted;
     return () => {
       cancelled = true;
