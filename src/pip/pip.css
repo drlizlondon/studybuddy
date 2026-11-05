@@ -64,13 +64,15 @@
 }
 
 /* State: writing. Pip is focused typing at his laptop */
-.pip-scene--writing .pip-body--working {
+.pip-scene--writing .pip-body--working,
+.pip-scene--writing .pip-companion-model {
   animation: pip-type 1.4s ease-in-out infinite;
   transform-origin: 200px 180px;
 }
 
 /* State: reading. Slow blink, gentle eye movement reading the screen */
-.pip-scene--reading .pip-eyes-idle {
+.pip-scene--reading .pip-eyes-idle,
+.pip-scene--reading .pip-eyes-focusing {
   animation: pip-read-glance 6s ease-in-out infinite;
 }
 

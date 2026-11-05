@@ -10,7 +10,7 @@ export const ROOMS = [
     name: "Swiss summer",
     day: "/images/rooms/alps-day.webp",
     night: "/images/rooms/alps-night.webp",
-    pip: { x: 50, y: 52, scale: 1 },
+    pip: { x: 50, y: 64, scale: 1 },
     images: true,
     placeholder: {
       day:

@@ -8,8 +8,10 @@ Every image file left under `public/` after SD-1b, each opened and looked at bef
 | public/images/study-room-evening.png | checked: no person (same desk at dusk, lamp on). Not used by the app. |
 | public/images/pip/pip-standing.webp | checked: no person (Pip 3D silicone character standing with mini arms, blanked screen). |
 | public/images/pip/pip-working.webp | checked: no person (Pip 3D silicone character working at laptop with mini arms and smiley mug). |
-| public/images/rooms/alps-day.webp | checked: no person (Swiss chalet window view onto green alpine meadows and snow peaks, empty desk, no person). |
-| public/images/rooms/alps-night.webp | checked: no person (Swiss chalet window view at night with stars, empty desk, no person). |
+| public/images/pip/pip-companion.webp | checked: no person (Pip 3D companion model in purple silicone with mini arms and blank screen). |
+| public/images/pip/prop-laptop.webp | checked: no person (Minimalist aluminum laptop prop asset on transparent background). |
+| public/images/rooms/alps-day.webp | checked: no person (Swiss Alps master room with arched window, empty oak desk, books, and flowers). |
+| public/images/rooms/alps-night.webp | checked: no person (Swiss Alps master room at night with glowing lamp, starry sky, and empty oak desk). |
 | public/images/rooms/country-day.webp | checked: no person (Chalet window view onto country rolling hills, empty desk, no person). |
 | public/images/rooms/country-night.webp | checked: no person (Country hills at night with dusk sky, empty desk, no person). |
 | public/images/rooms/office-day.webp | checked: no person (Calm studio window over modern green city towers in daylight, empty desk, no person). |

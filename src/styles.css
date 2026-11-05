@@ -4105,6 +4105,12 @@ body {
   z-index: 3;
 }
 
+@media (max-width: 640px) {
+  .pip-stage {
+    top: 70% !important;
+  }
+}
+
 .pip-face {
   display: block;
   width: 36px;
